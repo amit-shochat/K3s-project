@@ -1,0 +1,6 @@
+{
+    "KubernetesOption": {
+        "K3sVersion": "",
+        "ExtraSettings": "--write-kubeconfig-mode 644 --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage" 
+    }
+}
