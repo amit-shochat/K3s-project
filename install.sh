@@ -98,6 +98,7 @@ K3s_settings_file () {
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
 	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
+    LOCAL_DOMAIN_NAME="`jq -r '.KubernetesOption.LocalDomainName' $SETTING_FILE`"
 
 }
 
@@ -153,11 +154,13 @@ Uninstall_all () {
 	rm -rf /home/$(logname)/.kube &> /dev/null
 
 }
-##################
-## Installation###
-##################
+
+###################
+## Installation ###
+###################
 
 
+# Check if user is Root
 [ "$UID" -eq 0 ] || { echo -e "\nThis script must be run as root.\nPlease use sudo user and try again"; exit 1;}
 
 

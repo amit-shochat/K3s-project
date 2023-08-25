@@ -1,6 +1,7 @@
 {
     "KubernetesOption": {
         "K3sVersion": "",
-        "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage" 
+        "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage",
+        "LocalDomainName": "klika.local"
     }
 }
