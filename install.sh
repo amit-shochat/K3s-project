@@ -5,16 +5,31 @@
 ## Fucntion ##
 ##############
 
+##Var
+ROOT_FOLDER=`pwd`
+
+
 Check_system () { 
-    CPU_Architecture=`uname -m`
+    CPU_Architecture=`dpkg --print-architecture`
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
+	mkdir -p $ROOT_FOLDER/Argocd_app
+	mkdir =p $ROOT_FOLDER/Cert-manager
+	mkdir -p /tmp/file_to_delete
 }
 
 Install_pack () {
-    if [ "$Distributor" = "Ubuntu" ]; then 
-        apt update && apt upgrade
-        apt install git ssh jq curl
+    if [ "$Distributor" = "Ubuntu" ]; then
+        sudo apt-get update  
+        ehco "install Pack: git ssh jq curl apt-transport-https" 
+        apt install git ssh jq curl apt-transport-https &> /dev/null
+        echo "Install Helm..."
+        mkdir -p $ROOT_FOLDER/Installation_and_delete 
+        curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+        sudo apt-get update &> /dev/null
+        sudo apt-get install helm
+
     elif  [ "$Distributor" = "Centos" ]; then
         yum update && yum upgrade 
         yum install git ssh jq curl
@@ -98,20 +113,39 @@ K3s_settings_file () {
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
 	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
+    LOCAL_DOMAIN_NAME="`jq -r '.KubernetesOption.LocalDomainName' $SETTING_FILE`"
 
+	#ArgocdCD ifno
+	ARGOCD_VERSION="`jq -r '.ArgoCDSettings.ArgoCDVersion' $SETTING_FILE`"		
+	ARGOCD_NAMESPACE="`jq -r '.ArgoCDSettings.ArgoCDNamespace' $SETTING_FILE`"
+	ARGOCD_INSTALL_CLI="`jq -r '.ArgoCDSettings.InstallArgoCDCli' $SETTING_FILE`"
+	ARGOCD_CLI_VERSION="`jq -r '.ArgoCDSettings.CliVersion' $SETTING_FILE`"
+	ARGOCD_ADMIN_PASSWORD="`jq -r '.ArgoCDSettings.ArgoCDAdminPassword' $SETTING_FILE`"
+
+	#Cert-manger info 
+	CERT_MANAGER_INSTALL="`jq -r '.CertManagerSettings.InstallCertManager' $SETTING_FILE`"
+	CERT_MANAGER_VERSION="`jq -r '.CertManagerSettings.CertManagetVersion' $SETTING_FILE`"
+	CERT_MANAGER_LOCAL_DOMAIN_NAME="`jq -r '.CertManagerSettings.LocalDomainName' $SETTING_FILE`"
+	CERT_MANAGER_CREATE_ROOT_CA="`jq -r '.CertManagerSettings.CreateRootCA' $SETTING_FILE`"
+	CERT_MANAGER_TLS_CRT="`jq -r '.CertManagerSettings.TLSCRT' $SETTING_FILE`"
+	CERT_MANAGER_TLS_KEY="`jq -r '.CertManagerSettings.TLCKEY' $SETTING_FILE`"
+
+	#MetalLB info
+	METALLB_INSTALL="`jq -r '.CertManagerSettings.InstallMetallLB' $SETTING_FILE`"
+	METALLB_VERSION="`jq -r '.CertManagerSettings.MetalLBVersion' $SETTING_FILE`"
+	METALLB_IP_RANG="`jq -r '.CertManagerSettings.MetalLBIpRang' $SETTING_FILE`"
 }
 
 Install_k3s () {
 	echo -e "\nPreparing Host Provider "
 	echo -e "selected installation mode $COMMISION_MODE\n"
-	ROOT_FOLDER=`pwd`
 	local k3s_flag=`which k3s`
 	if [ -z $k3s_flag ]; then
 		# Install rancher's k3s
 		# echo "Installing Docker"
 		# curl https://releases.rancher.com/install-docker/19.03.sh | sh
 		echo -e "Installing K3S"
-		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
+		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
 		# check if K3S install and running
 		if [ ! -z $k3s_flag ]; then
 			echo -e "K3S Not installed properly\nPlease check your network connection and reinstall"
@@ -141,6 +175,167 @@ Install_k3s () {
 	fi
 }
 
+Install_Argocd () { 
+	# Add Argocd repo
+	echo "Start install ArgoCD" 
+	helm repo add argo https://argoproj.github.io/argo-helm &> /dev/null
+	helm repo update &> /dev/null
+	# install Argocd Helm chart 
+	helm install argocd argo/argo-cd \
+		--version $ARGOCD_VERSION \
+		--namespace $ARGOCD_NAMESPACE \
+		--create-namespace &> /dev/null 
+	echo "Waiting for ArgoCD get Ready" 
+	while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n argocd get pods -l app.kubernetes.io/name=argocd-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
+	if [ "$ARGOCD_INSTALL_CLI" -eq "true" ]; then
+		curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_CLI_VERSION/argocd-linux-$CPU_Architecture
+		chmod +x /usr/local/bin/argocd
+	fi
+	echo -e "Install ArgoCD Project's" 
+		cat << EOF > $ROOT_FOLDER/Argocd_app/Infrastructure.project.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infrastructure
+  namespace: argocd
+spec:
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  destinations:
+  - namespace: '*'
+    server: '*'
+  sourceRepos:
+  - '*'
+EOF
+	kubectl apply -f $ROOT_FOLDER/Argocd_app/Infrastructure.project.yaml	 
+	echo "Finish install ArgoCD"
+} 
+
+Install_Charts () {
+	if [ "$CERT_MANAGER_INSTALL" -eq "true"]; then 
+		cat << EOF > $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  destination:
+    namespace: cert-manager
+    server: https://kubernetes.default.svc
+  project: infrastructure
+  source:
+    chart: cert-manager
+    helm:
+      parameters:
+        - name: installCRDs
+          value: "true"
+    repoURL: https://charts.jetstack.io
+    targetRevision: $CERT_MANAGER_VERSION
+  syncPolicy:
+    automated:
+       selfHeal: true
+       prune: true
+    syncOptions:
+      - CreateNamespace=true
+EOF
+	kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+	kubectl wait pods -n cert-manager -l app=cert-manager --for condition=Ready --timeout=90s
+
+	# Create Self-signed crt for rootCA
+	cat << EOF > $ROOT_FOLDER/Cert-manager/selfsigned.issuer.yaml
+apiVersion: cert-manager.io/v1
+kind: Issuer
+namespace: cert-manager
+metadata:
+  name: selfsigned-issuer
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+EOF
+	kubectl apply -f $ROOT_FOLDER/Cert-manager/selfsigned.issuer.yaml
+
+	# Create local-domain issuer 
+	cat << EOF > $ROOT_FOLDER/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rootca-selfsigned-crt
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: $CERT_MANAGER_LOCAL_DOMAIN_NAME
+  secretName: rootca-selfsigned-crt
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: self-signed
+  namespace: cert-manager
+spec:
+  ca:
+    secretName: rootca-selfsigned-crt
+EOF
+	kubectl apply -f $ROOT_FOLDER/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+	fi
+
+	if [ "$METALLB_INSTALL" -eq "true"]; then 
+		cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://metallb.github.io/metallb
+    targetRevision: $METALLB_VERSION 
+    chart: metallb
+    helm:
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true
+EOF
+	kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+
+	cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: k3s-range
+  namespace: metallb-system
+spec:
+  addresses:
+  - $METALLB_VERSION
+---
+
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: k3s-range
+  namespace: metallb-system
+EOF	
+	fi
+
+}
+
+
 Uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
@@ -152,14 +347,28 @@ Uninstall_all () {
 	rm -rf ~/.kube &> /dev/null
 	rm -rf /home/$(logname)/.kube &> /dev/null
 
+	# uninstall Helm 
+	apt purge helm
+
 }
-##################
-## Installation###
-##################
+
+###################
+## Installation ###
+###################
 
 
+# Check if user is Root
 [ "$UID" -eq 0 ] || { echo -e "\nThis script must be run as root.\nPlease use sudo user and try again"; exit 1;}
 
+
+helm_flag=`which helm`
+if [ -z $curl_flag ]; then
+	echo "installing curl"
+	curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &> /dev/null
+	echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+	apt update &> /dev/null
+	sudo apt-get install helm -y &> /dev/null
+fi
 
 COMMISION_MODE=$(Get_install_mode)  
 case $COMMISION_MODE in 
@@ -170,6 +379,8 @@ case $COMMISION_MODE in
         Import_file_settings
         K3s_settings_file
         Install_k3s
+		Install_Argocd
+		Install_Charts
 	;;
 	Node)
 		# create log file

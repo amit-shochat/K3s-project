@@ -1,6 +1,27 @@
 {
     "KubernetesOption": {
         "K3sVersion": "",
-        "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage" 
+        "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage"
+        
+    },
+    "ArgoCDSettings": {
+        "ArgoCDVersion": "5.45.0",
+        "ArgoCDNamespace": "argocd",
+        "InstallArgoCDCli": "true",
+        "CliVersion": "latest",
+        "ArgoCDAdminPassword": ""
+    },
+    "CertManagerSettings": {
+        "InstallCertManager": "yes",
+        "CertMangetVersion": "v1.12.4",
+        "LocalDomainName": "klika.local",
+        "CreateRootCA": "true",
+        "TLSCRT": "",
+        "TLCKEY": ""
+    },
+    "MetalLBSettings": {
+        "InstallMetallLB": "yes",
+        "MetalLBVersion": "0.13.10",
+        "MetalLBIpRang": "172.16.198.0/24"
     }
 }
