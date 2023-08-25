@@ -96,8 +96,8 @@ K3s_settings_file () {
 	fi
 
 	# Kubernetes info
-	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
-	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
+	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
+	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
 
 }
 
@@ -141,6 +141,18 @@ Install_k3s () {
 	fi
 }
 
+Uninstall_all () {
+    # Uninstall K3s
+    k3s-uninstall.sh &> /dev/null 
+
+	# Remove kubectl 
+	sudo snap remove kubectl &> /dev/null
+
+	# Remove .kube folder
+	rm -rf ~/.kube &> /dev/null
+	rm -rf /home/$(logname)/.kube &> /dev/null
+
+}
 ##################
 ## Installation###
 ##################
@@ -163,7 +175,7 @@ case $COMMISION_MODE in
 		# create log file
 	;;
 	Uninstall)
-		k3s-uninstall.sh &> /dev/null
+		Uninstall_all 
 	;;
 	Quit)
 		echo -e "\nHave a nice day"
