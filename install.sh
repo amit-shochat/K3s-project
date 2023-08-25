@@ -111,7 +111,7 @@ Install_k3s () {
 		# echo "Installing Docker"
 		# curl https://releases.rancher.com/install-docker/19.03.sh | sh
 		echo -e "Installing K3S"
-		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="" sh -s - $K3S_EXTRA_ARG
+		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
 		# check if K3S install and running
 		if [ ! -z $k3s_flag ]; then
 			echo -e "K3S Not installed properly\nPlease check your network connection and reinstall"
@@ -155,7 +155,6 @@ case $COMMISION_MODE in
 		# create log file
         Check_system
         Install_pack
-        Get_install_mode
         Import_file_settings
         K3s_settings_file
         Install_k3s
