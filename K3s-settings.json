@@ -2,7 +2,6 @@
     "KubernetesOption": {
         "K3sVersion": "",
         "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage"
-        
     },
     "ArgoCDSettings": {
         "ArgoCDVersion": "5.45.0",
