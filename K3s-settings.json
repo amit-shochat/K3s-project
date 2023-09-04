@@ -8,7 +8,7 @@
         "ArgoCDNamespace": "argocd",
         "InstallArgoCDCli": "true",
         "CliVersion": "latest",
-        "ArgoCDAdminPassword": ""
+        "ArgoCDAdminPassword": "Admin"
     },
     "CertManagerSettings": {
         "InstallCertManager": "true",
