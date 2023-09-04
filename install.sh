@@ -14,21 +14,20 @@ Check_system () {
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
 	mkdir -p $ROOT_FOLDER/Argocd_app
-	mkdir =p $ROOT_FOLDER/Cert-manager
+	mkdir -p $ROOT_FOLDER/Cert-manager
 	mkdir -p /tmp/file_to_delete
 }
 
 Install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
         sudo apt-get update  
-        ehco "install Pack: git ssh jq curl apt-transport-https" 
+        echo "install Pack: git ssh jq curl apt-transport-https" 
         apt install git ssh jq curl apt-transport-https &> /dev/null
         echo "Install Helm..."
-        mkdir -p $ROOT_FOLDER/Installation_and_delete 
-        curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+        curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
         sudo apt-get update &> /dev/null
-        sudo apt-get install helm
+        sudo apt-get install helm &> /dev/null
 
     elif  [ "$Distributor" = "Centos" ]; then
         yum update && yum upgrade 
@@ -87,7 +86,7 @@ K3s_settings_file () {
 	read -e -p "`echo -e 'Enter filename, use tab for completion:\n(e.g. file path - "/home/USERNAME/file") \nfilename\b> '`" filename
 	SETTING_FILE="`realpath -s "$filename"`"
 
-	element_num=`cat config/Arc-setting.json | jq '. | length'`
+	element_num=`cat $SETTING_FILE | jq '. | length'`
 	X=0
 	empty=()
 	while [ $X -le "$(($element_num-1))" ]; do
@@ -104,11 +103,11 @@ K3s_settings_file () {
 			let X++
 	done
 
-	if (( ${#empty[@]} )); then
-		k3s-uninstall.sh &> /dev/null
-		echo -e "\nList of the empty var in $filename: \n$(for i in "${empty[@]}"; do echo ">> $i" ; done) \n\nPlease fill them and start agine"
-		exit 1
-	fi
+	# if (( ${#empty[@]} )); then
+	# 	k3s-uninstall.sh &> /dev/null
+	# 	echo -e "\nList of the empty var in $filename: \n$(for i in "${empty[@]}"; do echo ">> $i" ; done) \n\nPlease fill them and start agine"
+	# 	exit 1
+	# fi
 
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
@@ -124,16 +123,16 @@ K3s_settings_file () {
 
 	#Cert-manger info 
 	CERT_MANAGER_INSTALL="`jq -r '.CertManagerSettings.InstallCertManager' $SETTING_FILE`"
-	CERT_MANAGER_VERSION="`jq -r '.CertManagerSettings.CertManagetVersion' $SETTING_FILE`"
+	CERT_MANAGER_VERSION="`jq -r '.CertManagerSettings.CertMangetVersion' $SETTING_FILE`"
 	CERT_MANAGER_LOCAL_DOMAIN_NAME="`jq -r '.CertManagerSettings.LocalDomainName' $SETTING_FILE`"
 	CERT_MANAGER_CREATE_ROOT_CA="`jq -r '.CertManagerSettings.CreateRootCA' $SETTING_FILE`"
 	CERT_MANAGER_TLS_CRT="`jq -r '.CertManagerSettings.TLSCRT' $SETTING_FILE`"
 	CERT_MANAGER_TLS_KEY="`jq -r '.CertManagerSettings.TLCKEY' $SETTING_FILE`"
 
 	#MetalLB info
-	METALLB_INSTALL="`jq -r '.CertManagerSettings.InstallMetallLB' $SETTING_FILE`"
-	METALLB_VERSION="`jq -r '.CertManagerSettings.MetalLBVersion' $SETTING_FILE`"
-	METALLB_IP_RANG="`jq -r '.CertManagerSettings.MetalLBIpRang' $SETTING_FILE`"
+	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"
+	METALLB_VERSION="`jq -r '.MetalLBSettings.MetalLBVersion' $SETTING_FILE`"
+	METALLB_IP_RANG="`jq -r '.MetalLBSettings.MetalLBIpRang' $SETTING_FILE`"
 }
 
 Install_k3s () {
@@ -172,6 +171,7 @@ Install_k3s () {
 		sed -n 'H;${x;s/^\n//;s/ExecStartPre .*$/ExecStartPre=sleep 10\n&/;}' /etc/systemd/system/k3s.service
 		sleep 2 
 		echo -e "Finished configure K3S"
+		while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n kube-system get pods -l k8s-app=metrics-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
 	fi
 }
 
@@ -187,7 +187,8 @@ Install_Argocd () {
 		--create-namespace &> /dev/null 
 	echo "Waiting for ArgoCD get Ready" 
 	while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n argocd get pods -l app.kubernetes.io/name=argocd-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
-	if [ "$ARGOCD_INSTALL_CLI" -eq "true" ]; then
+	while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n argocd get pods -l app.kubernetes.io/name=argocd-dex-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
+	if [ $ARGOCD_INSTALL_CLI == "true" ]; then
 		curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/$ARGOCD_CLI_VERSION/argocd-linux-$CPU_Architecture
 		chmod +x /usr/local/bin/argocd
 	fi
@@ -213,7 +214,9 @@ EOF
 } 
 
 Install_Charts () {
-	if [ "$CERT_MANAGER_INSTALL" -eq "true"]; then 
+	echo $CERT_MANAGER_INSTALL
+	echo $CERT_MANAGER_VERSION
+	if [ $CERT_MANAGER_INSTALL == "true" ]; then 
 		cat << EOF > $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -241,13 +244,12 @@ spec:
       - CreateNamespace=true
 EOF
 	kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
-	kubectl wait pods -n cert-manager -l app=cert-manager --for condition=Ready --timeout=90s
+	while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then unset SEC;break;fi;sleep 1;done
 
 	# Create Self-signed crt for rootCA
 	cat << EOF > $ROOT_FOLDER/Cert-manager/selfsigned.issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: Issuer
-namespace: cert-manager
 metadata:
   name: selfsigned-issuer
   namespace: cert-manager
@@ -287,7 +289,7 @@ EOF
 	kubectl apply -f $ROOT_FOLDER/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
 	fi
 
-	if [ "$METALLB_INSTALL" -eq "true"]; then 
+	if [ $METALLB_INSTALL == "true" ]; then
 		cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -298,7 +300,7 @@ spec:
   project: infrastructure
   source:
     repoURL: https://metallb.github.io/metallb
-    targetRevision: $METALLB_VERSION 
+    targetRevision: $METALLB_IP_RANG 
     chart: metallb
     helm:
   destination:
@@ -312,9 +314,10 @@ spec:
       allowEmpty: true
       selfHeal: true
 EOF
-	kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+		while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then unset SEC;break;fi;sleep 1;done
 
-	cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml
+		cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -330,7 +333,8 @@ kind: L2Advertisement
 metadata:
   name: k3s-range
   namespace: metallb-system
-EOF	
+EOF
+		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml 
 	fi
 
 }
@@ -348,7 +352,7 @@ Uninstall_all () {
 	rm -rf /home/$(logname)/.kube &> /dev/null
 
 	# uninstall Helm 
-	apt purge helm
+	apt purge helm --yes &> /dev/null
 
 }
 
@@ -361,14 +365,14 @@ Uninstall_all () {
 [ "$UID" -eq 0 ] || { echo -e "\nThis script must be run as root.\nPlease use sudo user and try again"; exit 1;}
 
 
-helm_flag=`which helm`
-if [ -z $curl_flag ]; then
-	echo "installing curl"
-	curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &> /dev/null
-	echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-	apt update &> /dev/null
-	sudo apt-get install helm -y &> /dev/null
-fi
+# helm_flag=`which helm`
+# if [ -z $curl_flag ]; then
+# 	echo "installing curl"
+# 	curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &> /dev/null
+# 	echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
+# 	apt update &> /dev/null
+# 	sudo apt-get install helm -y &> /dev/null
+# fi
 
 COMMISION_MODE=$(Get_install_mode)  
 case $COMMISION_MODE in 
