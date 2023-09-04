@@ -21,8 +21,8 @@ Check_system () {
 Install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
         sudo apt-get update  
-        echo "install Pack: git ssh jq curl apt-transport-https" 
-        apt install git ssh jq curl apt-transport-https &> /dev/null
+        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils" 
+        apt install git ssh jq curl apt-transport-https apache2-utils &> /dev/null
         echo "Install Helm..."
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
@@ -133,6 +133,10 @@ K3s_settings_file () {
 	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"
 	METALLB_VERSION="`jq -r '.MetalLBSettings.MetalLBVersion' $SETTING_FILE`"
 	METALLB_IP_RANG="`jq -r '.MetalLBSettings.MetalLBIpRang' $SETTING_FILE`"
+
+	#Ingress-Nginx info
+	INGRESS_NGINX_INSTALL="`jq -r '.IngressNginxSettings.InastallIngressNginx' $SETTING_FILE`"
+	INGRESS_NGINX_VERSION="`jq -r '.IngressNginxSettings.IngressNginxVersion' $SETTING_FILE`"
 }
 
 Install_k3s () {
@@ -336,6 +340,88 @@ metadata:
 EOF
 		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml 
 	fi
+
+	# Insatll ingress-nginx helm 
+	if [ $INGRESS_NGINX_INSTALL == "true" ]; then
+		cat << EOF > $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ingress-nginx
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    targetRevision: $INGRESS_NGINX_VERSION
+    chart: ingress-nginx
+    helm:
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true
+EOF
+		kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+	fi
+
+	#Add Argocd Helm 
+	ARGOCD_ADMIN_PASSWORD_BCRYPT=`htpasswd -nbBC 10 "" $ARGOCD_ADMIN_PASSWORD | tr -d ':\n' | sed 's/$2y/$2a/'`
+	cat << EOF > $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    targetRevision: $ARGOCD_VERSION
+    chart: argo-cd
+    helm:
+      values: | 
+        server:
+          ingress:
+            enabled: true
+            ingressClassName: "nginx"
+            path: /
+            hosts:
+              - argo.klika.test
+            annotations:
+              cert-manager.io/cluster-issuer: ca-issuer
+              kubernetes.io/ingress.class: nginx
+              kubernetes.io/tls-acme: "true"
+              nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+              nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+            labels: {}
+            tls: 
+             - secretName: argo-crt
+               hosts:
+                 - argocd.klika.test
+      parameters:
+      - name: "server.service.type"
+        value: LoadBalancer
+	  - name: "configs.secret.argocdServerAdminPassword"
+	    value: "$ARGOCD_ADMIN_PASSWORD_BCRYPT"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true
+EOF
+		kubectl apply -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+
 
 }
 
