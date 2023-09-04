@@ -11,7 +11,7 @@
         "ArgoCDAdminPassword": ""
     },
     "CertManagerSettings": {
-        "InstallCertManager": "yes",
+        "InstallCertManager": "true",
         "CertMangetVersion": "v1.12.4",
         "LocalDomainName": "klika.local",
         "CreateRootCA": "true",
@@ -19,7 +19,7 @@
         "TLCKEY": ""
     },
     "MetalLBSettings": {
-        "InstallMetallLB": "yes",
+        "InstallMetallLB": "true",
         "MetalLBVersion": "0.13.10",
         "MetalLBIpRang": "172.16.198.0/24"
     }
