@@ -21,13 +21,13 @@ Check_system () {
 Install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
         sudo apt-get update  
-        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils" 
-        apt install git ssh jq curl apt-transport-https apache2-utils &> /dev/null
+        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils ansible" 
+        apt install -y git ssh jq curl apt-transport-https apache2-utils ansible  &> /dev/null
         echo "Install Helm..."
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
         sudo apt-get update &> /dev/null
-        sudo apt-get install helm &> /dev/null
+        sudo apt-get install -y helm &> /dev/null
 
     elif  [ "$Distributor" = "Centos" ]; then
         yum update && yum upgrade 
@@ -103,17 +103,20 @@ K3s_settings_file () {
 			let X++
 	done
 
-	# if (( ${#empty[@]} )); then
-	# 	k3s-uninstall.sh &> /dev/null
-	# 	echo -e "\nList of the empty var in $filename: \n$(for i in "${empty[@]}"; do echo ">> $i" ; done) \n\nPlease fill them and start agine"
-	# 	exit 1
-	# fi
+	if (( ${#empty[@]} )); then
+		k3s-uninstall.sh &> /dev/null
+		echo -e "\nList of the empty var in $filename: \n$(for i in "${empty[@]}"; do echo ">> $i" ; done) \n\nPlease fill them and start agine"
+	fi
+
+	#Ansible info
+	ANSIBLE_INSTALL="`jq -r '.AnsibleSettinges.InstallAnsible' $SETTING_FILE`"
+	ANSIBLE_NODE_USER="`jq -r '.AnsibleSettinges.WorkerUser' $SETTING_FILE`"
+	ANSIBLE_WORKER_IP=("`jq -r '.AnsibleSettinges.WorkerIp' K3s-settings.json`")
 
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
 	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
-    LOCAL_DOMAIN_NAME="`jq -r '.KubernetesOption.LocalDomainName' $SETTING_FILE`"
-
+	
 	#ArgocdCD ifno
 	ARGOCD_VERSION="`jq -r '.ArgoCDSettings.ArgoCDVersion' $SETTING_FILE`"		
 	ARGOCD_NAMESPACE="`jq -r '.ArgoCDSettings.ArgoCDNamespace' $SETTING_FILE`"
@@ -137,6 +140,23 @@ K3s_settings_file () {
 	#Ingress-Nginx info
 	INGRESS_NGINX_INSTALL="`jq -r '.IngressNginxSettings.InastallIngressNginx' $SETTING_FILE`"
 	INGRESS_NGINX_VERSION="`jq -r '.IngressNginxSettings.IngressNginxVersion' $SETTING_FILE`"
+
+}
+
+
+Configuring_ansible () {
+
+	if [ $ANSIBLE_INSTALL == "true" ]; then
+		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
+		echo -e "[kuberntes_node]" >> /etc/ansible/hosts
+		for i in $ANSIBLE_WORKER_IP; do 
+			echo -e "$(dig -x $i +short | sed 's/\.//') ansible_host=$i" >> /etc/ansible/hosts
+		done
+
+		# Update Playbook for user name 
+		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $NODE_USER -kK 
+	fi
 }
 
 Install_k3s () {
@@ -177,6 +197,16 @@ Install_k3s () {
 		echo -e "Finished configure K3S"
 		while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n kube-system get pods -l k8s-app=metrics-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
 	fi
+
+
+	if [ $ANSIBLE_INSTALL == "true" ]; then
+		local K3S_TOKEN="`cat /var/lib/rancher/k3s/server/node-token`"
+		local K3S_URL="`hostname -I | awk '{print $1}'`"
+		sed -i "s/REPLACE_ME_MASTER_IP/$K3S_URL/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-.yaml
+		sed -i "s/REPLACE_ME_TOKEN/$K3S_TOKEN/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-.yaml
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-.yaml -u $NODE_USER 
+	fi
+
 }
 
 Install_Argocd () { 
@@ -278,13 +308,13 @@ spec:
     size: 256
   issuerRef:
     name: selfsigned-issuer
-    kind: ClusterIssuer
+    kind: Issuer
     group: cert-manager.io
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: self-signed
+  name: local-domain-self-signed
   namespace: cert-manager
 spec:
   ca:
@@ -304,7 +334,7 @@ spec:
   project: infrastructure
   source:
     repoURL: https://metallb.github.io/metallb
-    targetRevision: $METALLB_IP_RANG 
+    targetRevision: $METALLB_VERSION
     chart: metallb
     helm:
   destination:
@@ -329,7 +359,7 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-  - $METALLB_VERSION
+  - $METALLB_IP_RANG
 ---
 
 apiVersion: metallb.io/v1beta1
@@ -392,10 +422,9 @@ spec:
             ingressClassName: "nginx"
             path: /
             hosts:
-              - argo.klika.test
+              - argo.$CERT_MANAGER_LOCAL_DOMAIN_NAME
             annotations:
-              cert-manager.io/cluster-issuer: ca-issuer
-              kubernetes.io/ingress.class: nginx
+              cert-manager.io/cluster-issuer: local-domain-self-signed
               kubernetes.io/tls-acme: "true"
               nginx.ingress.kubernetes.io/backend-protocol: HTTPS
               nginx.ingress.kubernetes.io/ssl-passthrough: "true"
@@ -403,12 +432,12 @@ spec:
             tls: 
              - secretName: argo-crt
                hosts:
-                 - argocd.klika.test
+                 - argocd.$CERT_MANAGER_LOCAL_DOMAIN_NAME
       parameters:
       - name: "server.service.type"
         value: LoadBalancer
-	  - name: "configs.secret.argocdServerAdminPassword"
-	    value: "$ARGOCD_ADMIN_PASSWORD_BCRYPT"
+      - name: "configs.secret.argocdServerAdminPassword"
+        value: $ARGOCD_ADMIN_PASSWORD_BCRYPT
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
