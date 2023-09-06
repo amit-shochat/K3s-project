@@ -463,6 +463,7 @@ EOF
 Uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
+	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $ANSIBLE_NODE_USER
 
 	# Remove kubectl 
 	sudo snap remove kubectl &> /dev/null
@@ -511,6 +512,8 @@ case $COMMISION_MODE in
 		# create log file
 	;;
 	Uninstall)
+		Import_file_settings
+		K3s_settings_file
 		Uninstall_all 
 	;;
 	Quit)
