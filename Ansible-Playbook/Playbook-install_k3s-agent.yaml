@@ -11,8 +11,10 @@
       apt: upgrade=dist force_apt_get=yes
 
     - name: Creating multiple files
-      ansible.builtin.shell: |
-        curl -sfL https://get.k3s.io | K3S_URL=https://REPLACE_ME_MASTER_IP:6443 K3S_TOKEN=REPLACE_ME_TOKEN sh -
+      ansible.builtin.shell: 
+        cmd: |
+          curl -sfL https://get.k3s.io | K3S_URL=https://REPLACE_ME_MASTER_IP:6443 K3S_TOKEN=REPLACE_ME_TOKEN sh -
+
 
     - name: checking service status
       command: systemctl status "{{ item }}"
