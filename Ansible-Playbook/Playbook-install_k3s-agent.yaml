@@ -21,7 +21,7 @@
       with_items:
       - k3s-agent
       register: result
-      ignore_errors: yes
+
     - name: showing report
       debug:
       var: result
