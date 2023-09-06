@@ -10,18 +10,18 @@
     - name: Upgrade all packages on servers
       apt: upgrade=dist force_apt_get=yes
 
+    - name : Install multiple packages
+      apt: name={{ item }} state=latest update_cache=true
+      loop: [git, wget, unzip, curl, ssh, jq, apt-transport-https, apache2-utils] 
+
+
     - name: Creating multiple files
       ansible.builtin.shell: 
         cmd: |
           curl -sfL https://get.k3s.io | K3S_URL=https://REPLACE_ME_MASTER_IP:6443 K3S_TOKEN=REPLACE_ME_TOKEN sh -
 
 
-    - name: checking service status
-      command: systemctl status "{{ item }}"
-      with_items:
-      - k3s-agent
-      register: result
-
-    - name: showing report
-      debug:
-      var: result
+    - name: Check for apache status
+      service_facts:
+    - debug:
+        var: ansible_facts.services.k3s-agent.state
