@@ -145,7 +145,8 @@ K3s_settings_file () {
 
 
 Configuring_ansible () {
-
+	echo "test test test"
+	echo "$ANSIBLE_INSTALL"
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo "Install Ansible and Configur"
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
@@ -206,9 +207,9 @@ Install_k3s () {
 		echo "Install K3s Worker agent" 
 		local K3S_TOKEN="`cat /var/lib/rancher/k3s/server/node-token`"
 		local K3S_URL="`hostname -I | awk '{print $1}'`"
-		sed -i "s/REPLACE_ME_MASTER_IP/$K3S_URL/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml.yaml
-		sed -i "s/REPLACE_ME_TOKEN/$K3S_TOKEN/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml.yaml
-		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml.yaml -u $ANSIBLE_NODE_USER 
+		sed -i "s/REPLACE_ME_MASTER_IP/$K3S_URL/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+		sed -i "s/REPLACE_ME_TOKEN/$K3S_TOKEN/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $ANSIBLE_NODE_USER 
 	fi
 
 }
@@ -500,8 +501,8 @@ case $COMMISION_MODE in
         Check_system
         Install_pack
         Import_file_settings
-		Configuring_ansible
         K3s_settings_file
+		Configuring_ansible
         Install_k3s
 		Install_Argocd
 		Install_Charts
