@@ -20,7 +20,7 @@
     "CertManagerSettings": {
         "InstallCertManager": "true",
         "CertMangetVersion": "1.12.4",
-        "LocalDomainName": "klika.local",
+        "LocalDomainName": "test.test",
         "CreateRootCA": "true"
     },
     "MetalLBSettings": {
