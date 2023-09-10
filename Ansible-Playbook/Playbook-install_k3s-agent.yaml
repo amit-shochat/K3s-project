@@ -21,6 +21,6 @@
         warn: no
 
     - name: Check for apache status
-      service_facts:
-    - debug:
-        var: ansible_facts.services.k3s-agent.state
+      shell: systemctl status k3s-agent.service
+      args:
+        warn: no
