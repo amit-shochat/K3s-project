@@ -149,7 +149,7 @@ K3s_settings_file () {
 Configuring_ansible () {
 	if [ $ANSIBLE_INSTALL == "false" ]; then
 		echo " Create ssh Key on Dir ~/.ssh" 
-		runuser -u $ANSIBLE_NODE_USER ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa
+		runuser -l $ANSIBLE_NODE_USER -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'
 	fi
 	for i in $ANSIBLE_WORKER_IP; do 
 		runuser -u $ANSIBLE_NODE_USER ssh-copy-id $i 
