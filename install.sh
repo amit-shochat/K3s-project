@@ -262,8 +262,6 @@ EOF
 } 
 
 Install_Charts () {
-	echo $CERT_MANAGER_INSTALL
-	echo $CERT_MANAGER_VERSION
 	if [ $CERT_MANAGER_INSTALL == "true" ]; then 
 		cat << EOF > $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 apiVersion: argoproj.io/v1alpha1
@@ -292,7 +290,17 @@ spec:
       - CreateNamespace=true
 EOF
 	kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
-	while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then unset SEC;break;fi;sleep 1;done
+	while [[ "$SEC" -lt 600 ]]; do 
+		let SEC++
+		[[ "$SEC" -eq 100 ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+			kubectl delete -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+			kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+		if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+			unset SEC
+			break
+		fi
+		sleep 1
+	done
 
 	# Create Self-signed crt for rootCA
 	cat << EOF > $ROOT_FOLDER/Cert-manager/selfsigned.issuer.yaml
