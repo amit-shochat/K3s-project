@@ -421,6 +421,20 @@ spec:
               - key: tls.crt
                 path: $CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-service
+  namespace: cert-manager
+spec:
+  selector: 
+    app: python-server
+  type: ClusterIP  
+  ports:
+    - name: python-service
+      port: 443
+      targetPort: 8000
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
