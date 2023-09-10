@@ -64,22 +64,22 @@ Get_install_mode () {
 }
 
 
-Import_file_settings () {
-	while [[ -z $IMPORT_FILE_SETTINGS ]]; do read -rep $'Do you want to import file settings? (YES/NO) ' IMPORT_FILE_SETTINGS; 
-		case $IMPORT_FILE_SETTINGS in
-		Y | y |YES | Yes | yes)
-			IMPORT_FILE_SETTINGS="YES"
-			break
-			;;
-		N | n |NO | No | no)
-			IMPORT_FILE_SETTINGS="NO"
-			break
-			;;
-		*) echo "invalid option"; unset IMPORT_FILE_SETTINGS;
-			;;
-		esac
-	done
-}
+# Import_file_settings () {
+# 	while [[ -z $IMPORT_FILE_SETTINGS ]]; do read -rep $'Do you want to import file settings? (YES/NO) ' IMPORT_FILE_SETTINGS; 
+# 		case $IMPORT_FILE_SETTINGS in
+# 		Y | y |YES | Yes | yes)
+# 			IMPORT_FILE_SETTINGS="YES"
+# 			break
+# 			;;
+# 		N | n |NO | No | no)
+# 			IMPORT_FILE_SETTINGS="NO"
+# 			break
+# 			;;
+# 		*) echo "invalid option"; unset IMPORT_FILE_SETTINGS;
+# 			;;
+# 		esac
+# 	done
+# }
 
 
 K3s_settings_file () {
@@ -501,7 +501,7 @@ case $COMMISION_MODE in
 		# create log file
         Check_system
         Install_pack
-        Import_file_settings
+        # Import_file_settings
         K3s_settings_file
 		Configuring_ansible
         Install_k3s
