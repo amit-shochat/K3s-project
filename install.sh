@@ -21,7 +21,7 @@ Check_system () {
 Install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
         sudo apt-get update  
-        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils ansible" 
+        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils ansible sshpass" 
         apt install -y git ssh jq curl apt-transport-https apache2-utils ansible  &> /dev/null
         echo "Install Helm..."
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
@@ -512,7 +512,7 @@ case $COMMISION_MODE in
 		# create log file
 	;;
 	Uninstall)
-		Import_file_settings
+		# Import_file_settings
 		K3s_settings_file
 		Uninstall_all 
 	;;
