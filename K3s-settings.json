@@ -11,9 +11,9 @@
         "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage"
     },
     "ArgoCDSettings": {
+        "InstallArgoCDCli": "true",
         "ArgoCDVersion": "5.45.0",
         "ArgoCDNamespace": "argocd",
-        "InstallArgoCDCli": "true",
         "CliVersion": "latest",
         "ArgoCDAdminPassword": "Admin"
     },
@@ -22,6 +22,14 @@
         "CertMangetVersion": "1.12.4",
         "LocalDomainName": "test.test",
         "CreateRootCA": "true"
+    },
+    "LetsEncrypt": {
+        "ApllyLetsEncrypt": "true",
+        "Email": ""
+    },
+    "DuckDns": {
+        "ApllyDockDns": "true",
+        "Email": ""
     },
     "MetalLBSettings": {
         "InstallMetallLB": "true",

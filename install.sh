@@ -109,6 +109,14 @@ k3s_settings_file () {
 	CERT_MANAGER_LOCAL_DOMAIN_NAME="`jq -r '.CertManagerSettings.LocalDomainName' $SETTING_FILE`"
 	CERT_MANAGER_CREATE_ROOT_CA="`jq -r '.CertManagerSettings.CreateRootCA' $SETTING_FILE`"
 
+	# Letsencrypt info
+	LETSENCRYPT_APPLY="`jq -r '.LetsEncrypt.ApllyLetsEncrypt' $SETTING_FILE`"
+	LETSENCRYPT_EMAIL="`jq -r '.LetsEncrypt.Email' $SETTING_FILE`"
+
+	# Duckdns info
+	DOCKDNS_APPLY="`jq -r '.DuckDns.ApllyDockDns' $SETTING_FILE`"
+	DOCKDNS_EMAIL="`jq -r '.DuckDns.Email' $SETTING_FILE`"
+
 	#MetalLB info
 	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"
 	METALLB_VERSION="`jq -r '.MetalLBSettings.MetalLBVersion' $SETTING_FILE`"
@@ -260,7 +268,8 @@ install_Argocd () {
 	echo "install ArgoCD" 
 	helm repo add argo https://argoproj.github.io/argo-helm &> /dev/null
 	helm repo update &> /dev/null
-	# install Argocd Helm chart 
+	# install Argocd Helm chart
+	ARGOCD_ADMIN_PASSWORD_BCRYPT=`htpasswd -nbBC 10 "" $ARGOCD_ADMIN_PASSWORD | tr -d ':\n' | sed 's/$2y/$2a/'`
 	helm install argocd argo/argo-cd \
 		--version $ARGOCD_VERSION \
 		--namespace $ARGOCD_NAMESPACE \
@@ -290,37 +299,99 @@ spec:
   - '*'
 EOF
 	kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Infrastructure.project.yaml	 
-	echo "Finish install ArgoCD"
-} 
-
-install_Charts () {
-	if [ $CERT_MANAGER_INSTALL == "true" ]; then
-		echo "install Cert-manager" 
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
+	cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: cert-manager
+  name: argocd
   namespace: argocd
 spec:
-  destination:
-    namespace: cert-manager
-    server: https://kubernetes.default.svc
   project: infrastructure
   source:
-    chart: cert-manager
+    repoURL: https://argoproj.github.io/argo-helm
+    targetRevision: $ARGOCD_VERSION
+    chart: argo-cd
     helm:
+      values: | 
+        server:
+          ingress:
+            enabled: true
+            ingressClassName: "nginx"
+            path: /
+            hosts:
+              - argo.$CERT_MANAGER_LOCAL_DOMAIN_NAME
+            annotations:
+              cert-manager.io/cluster-issuer: local-domain-self-signed
+              kubernetes.io/tls-acme: "true"
+              nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+              nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+            labels: {}
+            tls: 
+             - secretName: argo-crt
+               hosts:
+                 - argocd.$CERT_MANAGER_LOCAL_DOMAIN_NAME
       parameters:
-        - name: installCRDs
-          value: "true"
-    repoURL: https://charts.jetstack.io
-    targetRevision: $CERT_MANAGER_VERSION
+      - name: "server.service.type"
+        value: LoadBalancer
+      - name: "configs.secret.argocdServerAdminPassword"
+        value: $ARGOCD_ADMIN_PASSWORD_BCRYPT
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
   syncPolicy:
-    automated:
-       selfHeal: true
-       prune: true
     syncOptions:
       - CreateNamespace=true
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true
+EOF
+		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
+
+	while [[ "$SEC" -lt 600 ]]; do 
+		let SEC++
+		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+			kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
+			kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
+		fi
+		if [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+			unset SEC
+			break
+		fi
+		sleep 1
+	done
+
+	echo "Finish install ArgoCD"
+} 
+
+install_cert_manager () {
+	if [ $CERT_MANAGER_INSTALL == "true" ]; then
+		echo "install Cert-manager" 
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
+		apiVersion: argoproj.io/v1alpha1
+		kind: Application
+		metadata:
+		name: cert-manager
+		namespace: argocd
+		spec:
+		destination:
+			namespace: cert-manager
+			server: https://kubernetes.default.svc
+		project: infrastructure
+		source:
+			chart: cert-manager
+			helm:
+			parameters:
+				- name: installCRDs
+				value: "true"
+			repoURL: https://charts.jetstack.io
+			targetRevision: $CERT_MANAGER_VERSION
+		syncPolicy:
+			automated:
+			selfHeal: true
+			prune: true
+			syncOptions:
+			- CreateNamespace=true
 EOF
 	kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
 	while [[ "$SEC" -lt 600 ]]; do 
@@ -411,7 +482,7 @@ spec:
         volumeMounts:
           - mountPath: "/CA/$CERT_MANAGER_LOCAL_DOMAIN_NAME.crt"
             name: k3s-local-cert-rootca
-            subPath: klika.local_ca.crt
+            subPath: "$CERT_MANAGER_LOCAL_DOMAIN_NAME"_ca.crt
             readOnly: true
       volumes:
         - name: k3s-local-cert-rootca
@@ -419,7 +490,7 @@ spec:
             secretName: rootca-selfsigned-crt
             items:
               - key: tls.crt
-                path: $CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
+                path: "$CERT_MANAGER_LOCAL_DOMAIN_NAME"_ca.crt
 ---
 apiVersion: v1
 kind: Service
@@ -462,13 +533,40 @@ spec:
   - hosts:
     - "cert.$CERT_MANAGER_LOCAL_DOMAIN_NAME"
     secretName: cert-python-secret
-
 EOF
 	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Python-server-for-get-tls.Deployment.yaml
+	echo "Finish Deploy Python-cert-server"
+	if [ $LETSENCRYPT_APPLY == "true" ]; then
+		echo "Deploy letsencrypt ClusterIssuet"
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml
+	apiVersion: cert-manager.io/v1
+	kind: ClusterIssuer
+	metadata:
+	name: letsencrypt-production
+	spec:
+	acme:
+		# The ACME server URL
+		server: https://acme-v02.api.letsencrypt.org/directory
+		# Email address used for ACME registration
+		email: $LETSENCRYPT_EMAIL
+		# Name of a secret used to store the ACME account private key
+		privateKeySecretRef:
+		name: letsencrypt-prod
+		# Enable the HTTP-01 challenge provider
+		solvers:
+		- http01:
+			ingress:
+			class: nginx
+EOF
+	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml
+	echo "Finish Deploy letsencrypt ClusterIssuet"
 	echo "Finish install Cert-manager"
 	fi
+}
 
+install_metallb () {
 	if [ $METALLB_INSTALL == "true" ]; then
+		echo "Deploy Metallb"
 		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -525,8 +623,11 @@ metadata:
   namespace: metallb-system
 EOF
 		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.ip-reang.yaml 
+		echo "Finish Deploy Metallb"
 	fi
-
+}
+install_ingress_nginx () {
+	echo "Deploy Ingress Nginx"
 	# Insatll ingress-nginx helm 
 	if [ $INGRESS_NGINX_INSTALL == "true" ]; then
 		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
@@ -566,80 +667,15 @@ EOF
 			fi
 			sleep 1
 		done
-
+		echo "Finish Deploy Ingress Nginx"
 	fi
-
-	#Add Argocd Helm 
-	ARGOCD_ADMIN_PASSWORD_BCRYPT=`htpasswd -nbBC 10 "" $ARGOCD_ADMIN_PASSWORD | tr -d ':\n' | sed 's/$2y/$2a/'`
-	cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: argocd
-  namespace: argocd
-spec:
-  project: infrastructure
-  source:
-    repoURL: https://argoproj.github.io/argo-helm
-    targetRevision: $ARGOCD_VERSION
-    chart: argo-cd
-    helm:
-      values: | 
-        server:
-          ingress:
-            enabled: true
-            ingressClassName: "nginx"
-            path: /
-            hosts:
-              - argo.$CERT_MANAGER_LOCAL_DOMAIN_NAME
-            annotations:
-              cert-manager.io/cluster-issuer: local-domain-self-signed
-              kubernetes.io/tls-acme: "true"
-              nginx.ingress.kubernetes.io/backend-protocol: HTTPS
-              nginx.ingress.kubernetes.io/ssl-passthrough: "true"
-            labels: {}
-            tls: 
-             - secretName: argo-crt
-               hosts:
-                 - argocd.$CERT_MANAGER_LOCAL_DOMAIN_NAME
-      parameters:
-      - name: "server.service.type"
-        value: LoadBalancer
-      - name: "configs.secret.argocdServerAdminPassword"
-        value: $ARGOCD_ADMIN_PASSWORD_BCRYPT
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-    automated:
-      prune: true
-      allowEmpty: true
-      selfHeal: true
-EOF
-		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-
-	while [[ "$SEC" -lt 600 ]]; do 
-		let SEC++
-		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
-			kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-			kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-		fi
-		if [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
-			unset SEC
-			break
-		fi
-		sleep 1
-	done
-
+	
 }
-
 
 uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
-	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 
+	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa &> /dev/null
 
 	# Remove kubectl 
 	sudo snap remove kubectl &> /dev/null
@@ -654,6 +690,8 @@ uninstall_all () {
 	# Remove yaml folder 
 	rm -rf $ROOT_FOLDER/Yaml_files &> /dev/null
 
+	echo -e " Finis remove all deployment and file" 
+
 }
 
 ###################
@@ -667,15 +705,15 @@ uninstall_all () {
 COMMISION_MODE=$(get_install_mode)  
 case $COMMISION_MODE in 
 	Master)
-		# create log file
         check_system
         install_pack
-        # Import_file_settings
         k3s_settings_file
 		configuring_ansible
         install_k3s
 		install_Argocd
-		install_Charts
+		install_cert_manager
+		install_metallb
+		install_ingress_nginx
 	;;
 	Node)
 		# create log file
