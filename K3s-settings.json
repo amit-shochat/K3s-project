@@ -21,9 +21,7 @@
         "InstallCertManager": "true",
         "CertMangetVersion": "1.12.4",
         "LocalDomainName": "klika.local",
-        "CreateRootCA": "true",
-        "TLSCRT": "",
-        "TLCKEY": ""
+        "CreateRootCA": "true"
     },
     "MetalLBSettings": {
         "InstallMetallLB": "true",

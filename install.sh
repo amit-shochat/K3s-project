@@ -9,7 +9,7 @@
 ROOT_FOLDER=`pwd`
 
 
-Check_system () { 
+check_system () { 
     CPU_Architecture=`dpkg --print-architecture`
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
@@ -18,11 +18,11 @@ Check_system () {
 	mkdir -p /tmp/file_to_delete
 }
 
-Install_pack () {
+install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
         sudo apt-get update  
-        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils ansible sshpass" 
-        apt install -y git ssh jq curl apt-transport-https apache2-utils ansible sshpass &> /dev/null
+        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils" 
+        apt install -y git ssh jq curl apt-transport-https apache2-utils &> /dev/null
         echo "Install Helm..."
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
@@ -35,7 +35,7 @@ Install_pack () {
     fi
 }
 
-Get_install_mode () {
+get_install_mode () {
 	PS3='Please select Install mode: '
 	options=("Master" "Node" "Uninstall" "Quit")
 	select opt in "${options[@]}"
@@ -64,25 +64,7 @@ Get_install_mode () {
 }
 
 
-# Import_file_settings () {
-# 	while [[ -z $IMPORT_FILE_SETTINGS ]]; do read -rep $'Do you want to import file settings? (YES/NO) ' IMPORT_FILE_SETTINGS; 
-# 		case $IMPORT_FILE_SETTINGS in
-# 		Y | y |YES | Yes | yes)
-# 			IMPORT_FILE_SETTINGS="YES"
-# 			break
-# 			;;
-# 		N | n |NO | No | no)
-# 			IMPORT_FILE_SETTINGS="NO"
-# 			break
-# 			;;
-# 		*) echo "invalid option"; unset IMPORT_FILE_SETTINGS;
-# 			;;
-# 		esac
-# 	done
-# }
-
-
-K3s_settings_file () {
+k3s_settings_file () {
 	read -e -p "`echo -e 'Enter filename, use tab for completion:\n(e.g. file path - "/home/USERNAME/file") \nfilename\b> '`" filename
 	SETTING_FILE="`realpath -s "$filename"`"
 
@@ -115,7 +97,6 @@ K3s_settings_file () {
 	ANSIBLE_NODE_USER="`jq -r '.AnsibleSettinges.WorkerUser' $SETTING_FILE`"
 	ANSIBLE_WORKER_IP=("`jq -r '.AnsibleSettinges.WorkerIp' K3s-settings.json`")
 	
-
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
 	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
@@ -132,8 +113,6 @@ K3s_settings_file () {
 	CERT_MANAGER_VERSION="`jq -r '.CertManagerSettings.CertMangetVersion' $SETTING_FILE`"
 	CERT_MANAGER_LOCAL_DOMAIN_NAME="`jq -r '.CertManagerSettings.LocalDomainName' $SETTING_FILE`"
 	CERT_MANAGER_CREATE_ROOT_CA="`jq -r '.CertManagerSettings.CreateRootCA' $SETTING_FILE`"
-	CERT_MANAGER_TLS_CRT="`jq -r '.CertManagerSettings.TLSCRT' $SETTING_FILE`"
-	CERT_MANAGER_TLS_KEY="`jq -r '.CertManagerSettings.TLCKEY' $SETTING_FILE`"
 
 	#MetalLB info
 	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"
@@ -147,22 +126,28 @@ K3s_settings_file () {
 }
 
 
-Configuring_ansible () {
-	if [ -z $PASS_FOR_USER ]; then 
-		pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
-		echo
-	fi
-	if [ $CREATE_SSH_KEY == "true" ]; then
-		echo "Create ssh Key on Dir ~/.ssh" 
-		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
-	fi
-	for i in $ANSIBLE_WORKER_IP; do 
-		sudo runuser -l  $(logname) "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i "
-	done
-
-
+configuring_ansible () {
+	
 	if [ $ANSIBLE_INSTALL == "true" ]; then
-		echo "Install Ansible and Configur"
+		# Insatall Pack 
+		apt install -y  ansible sshpass &> /dev/null
+		# Enter sudo pasowrd user for Ansible install
+		if [ -z $PASS_FOR_USER ]; then 
+			pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
+			echo
+		fi
+		# Create an ssh key 
+		if [ $CREATE_SSH_KEY == "true" ]; then
+			echo "Create ssh Key and public" 
+			runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
+		fi
+		# copy ssh to worker 
+		for i in $ANSIBLE_WORKER_IP; do 
+			echo "copy $(logname) ssh key to worker"
+			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i "
+		done
+		# Configur Ansible hosts 
+		echo "Install Ansible and Configuration"
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
 		echo -e "[kuberntes_node]" >> /etc/ansible/hosts
 		for i in $ANSIBLE_WORKER_IP; do 
@@ -170,23 +155,24 @@ Configuring_ansible () {
 		done
 
 		# Update Playbook for user name 
-		echo "Run Updare playbook for update Worker node"
+		echo "Run Update playbook for pack update Worker node"
 		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml
 		
-		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa ##-kK 
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 
 	fi
 }
 
-Install_k3s () {
+install_k3s () {
 	echo -e "\nPreparing Host Provider "
 	echo -e "selected installation mode $COMMISION_MODE\n"
 	local k3s_flag=`which k3s`
 	if [ -z $k3s_flag ]; then
-		# Install rancher's k3s
-		# echo "Installing Docker"
-		# curl https://releases.rancher.com/install-docker/19.03.sh | sh
+		# Install k3s
 		echo -e "Installing K3S"
 		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
+		# If no multe node disabled CriticalAddonsOnly taint
+		# if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]
+			
 		# check if K3S install and running
 		if [ ! -z $k3s_flag ]; then
 			echo -e "K3S Not installed properly\nPlease check your network connection and reinstall"
@@ -196,7 +182,6 @@ Install_k3s () {
 		fi
 		echo "Setting initial K3S configuration"
 		# Install kubectl
-		sudo apt-get update  &> /dev/null
 		sudo apt-get install -y apt-transport-https ca-certificates curl  &> /dev/null
 		sudo snap install kubectl --classic   &> /dev/null
 		kubectl completion bash > /tmp/kubectl_completion
@@ -216,7 +201,7 @@ Install_k3s () {
 		while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n kube-system get pods -l k8s-app=metrics-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
 	fi
 
-
+	# Ansible add nodes
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo "Install K3s Worker agent" 
 		local K3S_TOKEN="`cat /var/lib/rancher/k3s/server/node-token`"
@@ -228,7 +213,7 @@ Install_k3s () {
 
 }
 
-Install_Argocd () { 
+install_Argocd () { 
 	# Add Argocd repo
 	echo "Start install ArgoCD" 
 	helm repo add argo https://argoproj.github.io/argo-helm &> /dev/null
@@ -266,7 +251,7 @@ EOF
 	echo "Finish install ArgoCD"
 } 
 
-Install_Charts () {
+install_Charts () {
 	if [ $CERT_MANAGER_INSTALL == "true" ]; then 
 		cat << EOF > $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 apiVersion: argoproj.io/v1alpha1
@@ -503,11 +488,23 @@ spec:
 EOF
 		kubectl apply -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
 
+	while [[ "$SEC" -lt 600 ]]; do 
+		let SEC++
+		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+			kubectl delete -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+			kubectl apply -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+		fi
+		if [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+			unset SEC
+			break
+		fi
+		sleep 1
+	done
 
 }
 
 
-Uninstall_all () {
+uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
 	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 
@@ -541,26 +538,26 @@ Uninstall_all () {
 # 	apt update &> /dev/null
 # 	sudo apt-get install helm -y &> /dev/null
 # fi
-COMMISION_MODE=$(Get_install_mode)  
+COMMISION_MODE=$(get_install_mode)  
 case $COMMISION_MODE in 
 	Master)
 		# create log file
-        Check_system
-        Install_pack
+        check_system
+        install_pack
         # Import_file_settings
-        K3s_settings_file
-		Configuring_ansible
-        Install_k3s
-		Install_Argocd
-		Install_Charts
+        k3s_settings_file
+		configuring_ansible
+        install_k3s
+		install_Argocd
+		install_Charts
 	;;
 	Node)
 		# create log file
 	;;
 	Uninstall)
 		# Import_file_settings
-		K3s_settings_file
-		Uninstall_all 
+		k3s_settings_file
+		uninstall_all 
 	;;
 	Quit)
 		echo -e "\nHave a nice day"
