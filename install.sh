@@ -16,21 +16,6 @@ check_system () {
 	mkdir -p $ROOT_FOLDER/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook}
 }
 
-install_pack () {
-    if [ "$Distributor" = "Ubuntu" ]; then
-        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils Helm" 
-		sudo apt-get update  1> /dev/null
-        curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
-        sudo apt-get update &> /dev/null
-        sudo apt-get install -y git ssh jq curl apt-transport-https apache2-utils helm &> /dev/null
-
-    elif  [ "$Distributor" = "Centos" ]; then
-        yum update && yum upgrade 
-        yum install git ssh jq curl
-    fi
-}
-
 get_install_mode () {
 	PS3='Please select Install mode: '
 	options=("Master" "Node" "Uninstall" "Quit")
@@ -128,9 +113,22 @@ k3s_settings_file () {
 
 }
 
+install_pack () {
+    if [ "$Distributor" = "Ubuntu" ]; then
+        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils Helm" 
+		sudo apt-get update  1> /dev/null
+        curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
+        sudo apt-get update &> /dev/null
+        sudo apt-get install -y git ssh jq curl apt-transport-https apache2-utils helm &> /dev/null
+
+    elif  [ "$Distributor" = "Centos" ]; then
+        yum update && yum upgrade 
+        yum install git ssh jq curl
+    fi
+}
 
 configuring_ansible () {
-	
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo -e "\n Install and configuration ansible"
 		# Insatall Pack 
