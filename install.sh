@@ -152,12 +152,12 @@ Configuring_ansible () {
 		pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
 		echo
 	fi
-	if [ $CREATE_SSH_KEY == "false" ]; then
+	if [ $CREATE_SSH_KEY == "true" ]; then
 		echo "Create ssh Key on Dir ~/.ssh" 
 		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
 	fi
 	for i in $ANSIBLE_WORKER_IP; do 
-		runuser -l  $(logname) echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i 
+		sudo runuser -l  $(logname) "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i "
 	done
 
 
