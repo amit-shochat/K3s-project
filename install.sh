@@ -554,7 +554,6 @@ case $COMMISION_MODE in
 	;;
 	Uninstall)
 		# Import_file_settings
-		k3s_settings_file
 		uninstall_all 
 	;;
 	Quit)
