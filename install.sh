@@ -292,9 +292,10 @@ EOF
 	kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 	while [[ "$SEC" -lt 600 ]]; do 
 		let SEC++
-		[[ "$SEC" -eq 100 ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+		if [[ "$SEC" -eq 100 ]] || [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
 			kubectl delete -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 			kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+		fi
 		if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 			unset SEC
 			break
@@ -371,7 +372,18 @@ spec:
       selfHeal: true
 EOF
 		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
-		while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then unset SEC;break;fi;sleep 1;done
+		while [[ "$SEC" -lt 600 ]]; do 
+			let SEC++
+			if [[ "$SEC" -eq 100 ]] || [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
+				kubectl delete -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+			fi
+			if [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+				unset SEC
+				break
+			fi
+			sleep 1
+		done
 
 		cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml
 apiVersion: metallb.io/v1beta1
@@ -420,6 +432,19 @@ spec:
       selfHeal: true
 EOF
 		kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+		while [[ "$SEC" -lt 600 ]]; do 
+			let SEC++
+			if [[ "$SEC" -eq 100 ]] || [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
+				kubectl delte -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+			fi
+			if [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+				unset SEC
+				break
+			fi
+			sleep 1
+		done
+
 	fi
 
 	#Add Argocd Helm 
