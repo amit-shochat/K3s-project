@@ -148,6 +148,9 @@ K3s_settings_file () {
 
 
 Configuring_ansible () {
+	if [ -z $PASS_FOR_USER ]; then 
+		pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";echo;done
+	fi
 	if [ $CREATE_SSH_KEY == "false" ]; then
 		echo "Create ssh Key on Dir ~/.ssh" 
 		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
@@ -537,9 +540,6 @@ Uninstall_all () {
 # 	apt update &> /dev/null
 # 	sudo apt-get install helm -y &> /dev/null
 # fi
-if [ -z $PASS_FOR_USER ]; then 
-	pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
-fi
 COMMISION_MODE=$(Get_install_mode)  
 case $COMMISION_MODE in 
 	Master)
