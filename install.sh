@@ -147,12 +147,12 @@ K3s_settings_file () {
 
 
 Configuring_ansible () {
-	if [ $ANSIBLE_INSTALL == "false" ]; then
+	if [ $HAVE_SSH_KEY == "false" ]; then
 		echo " Create ssh Key on Dir ~/.ssh" 
-		sudo runuser -u $(logname) ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa
+		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
 	fi
 	for i in $ANSIBLE_WORKER_IP; do 
-		sudo runuser -u $(logname) ssh-copy-id $i 
+		runuser -l  $(logname) ssh-copy-id $i
 	done
 
 
