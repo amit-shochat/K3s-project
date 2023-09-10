@@ -110,7 +110,7 @@ K3s_settings_file () {
 
 	#Ansible info
 	ANSIBLE_INSTALL="`jq -r '.AnsibleSettinges.InstallAnsible' $SETTING_FILE`"
-	Have_SSH_KEY="`jq -r '.AnsibleSettinges.HaveSshKey' $SETTING_FILE`"
+	HAVE_SSH_KEY="`jq -r '.AnsibleSettinges.HaveSshKey' $SETTING_FILE`"
 	ANSIBLE_NODE_USER="`jq -r '.AnsibleSettinges.WorkerUser' $SETTING_FILE`"
 	ANSIBLE_WORKER_IP=("`jq -r '.AnsibleSettinges.WorkerIp' K3s-settings.json`")
 	
