@@ -96,11 +96,11 @@ k3s_settings_file () {
 
 	# Letsencrypt info
 	LETSENCRYPT_APPLY="`jq -r '.LetsEncrypt.ApllyLetsEncrypt' $SETTING_FILE`"
-	LETSENCRYPT_EMAIL="`jq -r '.LetsEncrypt.Email' $SETTING_FILE`"
+	LETSENCRYPT_EMAIL="`jq -r '.LetsEncrypt.LetsEncryptEmail' $SETTING_FILE`"
 
 	# Duckdns info
 	DOCKDNS_APPLY="`jq -r '.DuckDns.ApllyDockDns' $SETTING_FILE`"
-	DOCKDNS_EMAIL="`jq -r '.DuckDns.Email' $SETTING_FILE`"
+	DOCKDNS_EMAIL="`jq -r '.DuckDns.DuckDnsEmail' $SETTING_FILE`"
 
 	#MetalLB info
 	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"

@@ -25,11 +25,11 @@
     },
     "LetsEncrypt": {
         "ApllyLetsEncrypt": "true",
-        "Email": ""
+        "LetsEncryptEmail": ""
     },
     "DuckDns": {
         "ApllyDockDns": "true",
-        "Email": ""
+        "DuckDnsEmail": ""
     },
     "MetalLBSettings": {
         "InstallMetallLB": "true",
