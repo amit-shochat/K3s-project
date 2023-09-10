@@ -152,9 +152,9 @@ Configuring_ansible () {
 		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
 	fi
 	for i in $ANSIBLE_WORKER_IP; do 
-		runuser -l $(logname) ssh-copy-id $i
+		runuser -l  $(logname) ssh-copy-id $i
 	done
-	sleep 10
+
 
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo "Install Ansible and Configur"
@@ -168,7 +168,7 @@ Configuring_ansible () {
 		echo "Run Updare playbook for update Worker node"
 		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml
 		
-		runuser -l $(logname) ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $ANSIBLE_NODE_USER ##-kK 
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $(logname) ##-kK 
 	fi
 }
 
@@ -218,7 +218,7 @@ Install_k3s () {
 		local K3S_URL="`hostname -I | awk '{print $1}'`"
 		sed -i "s/REPLACE_ME_MASTER_IP/$K3S_URL/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml
 		sed -i "s/REPLACE_ME_TOKEN/$K3S_TOKEN/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml
-		runuser -l $(logname) ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $ANSIBLE_NODE_USER 
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname)
 	fi
 
 }
@@ -472,7 +472,7 @@ EOF
 Uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
-	runuser -l $(logname) ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $ANSIBLE_NODE_USER
+	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $(logname)
 
 	# Remove kubectl 
 	sudo snap remove kubectl &> /dev/null
