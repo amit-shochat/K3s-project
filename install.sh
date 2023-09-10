@@ -13,15 +13,13 @@ check_system () {
     CPU_Architecture=`dpkg --print-architecture`
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
-	mkdir -p $ROOT_FOLDER/Argocd_app
-	mkdir -p $ROOT_FOLDER/Cert-manager
-	mkdir -p /tmp/file_to_delete
+	mkdir -p $ROOT_FOLDER/Yaml_files/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook}
 }
 
 install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
-        sudo apt-get update  1> /dev/null
         echo "install Pack: git ssh jq curl apt-transport-https apache2-utils Helm" 
+		sudo apt-get update  1> /dev/null
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
         sudo apt-get update &> /dev/null
@@ -127,6 +125,7 @@ k3s_settings_file () {
 configuring_ansible () {
 	
 	if [ $ANSIBLE_INSTALL == "true" ]; then
+		echo -e "\n Install and configuration ansible"
 		# Insatall Pack 
 		apt install -y  ansible sshpass &> /dev/null
 		# Enter sudo pasowrd user for Ansible install
@@ -141,8 +140,8 @@ configuring_ansible () {
 		fi
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
-			echo "copy $(logname) ssh key to worker"
-			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i 1> /dev/null "
+			echo "copy User: $(logname) ssh key to worker"
+			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i &> /dev/null"
 		done
 		# Configur Ansible hosts 
 		echo "Install Ansible and Configuration"
@@ -151,12 +150,29 @@ configuring_ansible () {
 		for i in $ANSIBLE_WORKER_IP; do 
 			echo -e "$(dig -x $i +short | sed 's/\.//') ansible_host=$i" >> /etc/ansible/hosts 
 		done
-
 		# Update Playbook for user name 
 		echo "Run Update playbook for pack update Worker node"
-		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml 1> /dev/null
-		
-		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 1> /dev/null
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml
+---
+- hosts: kuberntes_node
+  become: true
+  become_user: root
+
+  tasks:
+    - name: Update apt repo and cache on all Debian/Ubuntu boxes
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+    - name: Upgrade all packages on servers
+      apt: upgrade=dist force_apt_get=yes
+
+    - name: Creating a file For Root Ansible
+      copy:
+        dest: "/etc/sudoers.d/$ANSIBLE_NODE_USER"
+        content: |
+          $ANSIBLE_NODE_USER ALL=(ALL) NOPASSWD: ALL
+EOF
+		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 1> /dev/null
+		echo " Finish install and configuration ansible" 
 	fi
 }
 
@@ -169,8 +185,9 @@ install_k3s () {
 		echo -e "Installing K3S"
 		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
 		# If no multe node disabled CriticalAddonsOnly taint
-		# if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]
-			
+		if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]
+			kubectl taint node $(hostname) CriticalAddonsOnly=true:NoExecute-
+		fi
 		# check if K3S install and running
 		if [ ! -z $k3s_flag ]; then
 			echo -e "K3S Not installed properly\nPlease check your network connection and reinstall"
@@ -196,6 +213,7 @@ install_k3s () {
 		sed -n 'H;${x;s/^\n//;s/ExecStartPre .*$/ExecStartPre=sleep 10\n&/;}' /etc/systemd/system/k3s.service
 		sleep 2 
 		echo -e "Finished configure K3S"
+		# wait for matric pod started 
 		while [[ "$SEC" -lt 600 ]]; do let SEC++;if [[ $(kubectl -n kube-system get pods -l k8s-app=metrics-server -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') = "True" ]]; then unset SEC;break;fi;sleep 1;done
 	fi
 
@@ -204,9 +222,35 @@ install_k3s () {
 		echo "Install K3s Worker agent" 
 		local K3S_TOKEN="`cat /var/lib/rancher/k3s/server/node-token`"
 		local K3S_URL="`hostname -I | awk '{print $1}'`"
-		sed -i "s/REPLACE_ME_MASTER_IP/$K3S_URL/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml
-		sed -i "s/REPLACE_ME_TOKEN/$K3S_TOKEN/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml
-		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+---
+- hosts: kuberntes_node
+  become: true
+  become_user: root
+
+  tasks:
+    - name: Update apt repo and cache on all Debian/Ubuntu boxes
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+    - name: Upgrade all packages on servers
+      apt: upgrade=dist force_apt_get=yes
+
+    - name : Install multiple packages
+      apt: name={{ item }} state=latest update_cache=true
+      loop: [git, wget, unzip, curl, ssh, jq, apt-transport-https, apache2-utils] 
+
+
+    - name: Creating multiple files
+      shell: curl -sfL https://get.k3s.io | K3S_URL=https://$K3S_URL:6443 K3S_TOKEN=$K3S_TOKEN sh -
+      args:
+        warn: no
+
+    - name: Check for apache status
+      shell: systemctl status k3s-agent.service
+      args:
+        warn: no
+EOF
+		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
 	fi
 
 }
@@ -229,7 +273,7 @@ install_Argocd () {
 		chmod +x /usr/local/bin/argocd
 	fi
 	echo -e "Install ArgoCD Project's" 
-		cat << EOF > $ROOT_FOLDER/Argocd_app/Infrastructure.project.yaml
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Infrastructure.project.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -245,13 +289,13 @@ spec:
   sourceRepos:
   - '*'
 EOF
-	kubectl apply -f $ROOT_FOLDER/Argocd_app/Infrastructure.project.yaml	 
+	kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Infrastructure.project.yaml	 
 	echo "Finish install ArgoCD"
 } 
 
 install_Charts () {
 	if [ $CERT_MANAGER_INSTALL == "true" ]; then 
-		cat << EOF > $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -277,12 +321,12 @@ spec:
     syncOptions:
       - CreateNamespace=true
 EOF
-	kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+	kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
 	while [[ "$SEC" -lt 600 ]]; do 
 		let SEC++
 		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
-			kubectl delete -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
-			kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
+			kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
+			kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
 		fi
 		if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 			unset SEC
@@ -292,7 +336,7 @@ EOF
 	done
 
 	# Create Self-signed crt for rootCA
-	cat << EOF > $ROOT_FOLDER/Cert-manager/selfsigned.issuer.yaml
+	cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/selfsigned.issuer.yaml
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
@@ -301,10 +345,10 @@ metadata:
 spec:
   selfSigned: {}
 EOF
-	kubectl apply -f $ROOT_FOLDER/Cert-manager/selfsigned.issuer.yaml
+	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/selfsigned.issuer.yaml
 
 	# Create local-domain issuer 
-	cat << EOF > $ROOT_FOLDER/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+	cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -331,11 +375,11 @@ spec:
   ca:
     secretName: rootca-selfsigned-crt
 EOF
-	kubectl apply -f $ROOT_FOLDER/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
 	fi
 
 	if [ $METALLB_INSTALL == "true" ]; then
-		cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -359,12 +403,12 @@ spec:
       allowEmpty: true
       selfHeal: true
 EOF
-		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
 		while [[ "$SEC" -lt 600 ]]; do 
 			let SEC++
 			if [[ "$SEC" -eq 2000 ]] || [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
-				kubectl delete -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
-				kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
+				kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
 			fi
 			if [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 				unset SEC
@@ -373,7 +417,7 @@ EOF
 			sleep 1
 		done
 
-		cat << EOF > $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.ip-reang.yaml
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -390,12 +434,12 @@ metadata:
   name: k3s-range
   namespace: metallb-system
 EOF
-		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.ip-reang.yaml 
+		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.ip-reang.yaml 
 	fi
 
 	# Insatll ingress-nginx helm 
 	if [ $INGRESS_NGINX_INSTALL == "true" ]; then
-		cat << EOF > $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -419,12 +463,12 @@ spec:
       allowEmpty: true
       selfHeal: true
 EOF
-		kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
 		while [[ "$SEC" -lt 600 ]]; do 
 			let SEC++
 			if [[ "$SEC" -eq 2000 ]] || [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
-				kubectl delte -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
-				kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
+				kubectl delte -f $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
 			fi
 			if [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 				unset SEC
@@ -437,7 +481,7 @@ EOF
 
 	#Add Argocd Helm 
 	ARGOCD_ADMIN_PASSWORD_BCRYPT=`htpasswd -nbBC 10 "" $ARGOCD_ADMIN_PASSWORD | tr -d ':\n' | sed 's/$2y/$2a/'`
-	cat << EOF > $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+	cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -484,13 +528,13 @@ spec:
       allowEmpty: true
       selfHeal: true
 EOF
-		kubectl apply -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
 
 	while [[ "$SEC" -lt 600 ]]; do 
 		let SEC++
 		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
-			kubectl delete -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
-			kubectl apply -f $ROOT_FOLDER/Argocd_app/Argocd-application.yaml
+			kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
+			kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
 		fi
 		if [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 			unset SEC
