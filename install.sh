@@ -152,7 +152,7 @@ Configuring_ansible () {
 		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
 	fi
 	for i in $ANSIBLE_WORKER_IP; do 
-		runuser -l  $(logname) ssh-copy-id -f $i
+		runuser -l $(logname) ssh-copy-id $i
 	done
 	sleep 10
 
