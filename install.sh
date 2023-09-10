@@ -13,7 +13,7 @@ check_system () {
     CPU_Architecture=`dpkg --print-architecture`
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
-	mkdir -p $ROOT_FOLDER/Yaml_files/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook}
+	mkdir -p $ROOT_FOLDER/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook}
 }
 
 install_pack () {
@@ -140,7 +140,7 @@ configuring_ansible () {
 		fi
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
-			echo "copy User: $(logname) ssh key to worker"
+			echo "copy User: $(logname) ssh key to worker $(dig -x $i +short | sed 's/\.//')_$i"
 			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i &> /dev/null"
 		done
 		# Configur Ansible hosts 
@@ -185,7 +185,7 @@ install_k3s () {
 		echo -e "Installing K3S"
 		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
 		# If no multe node disabled CriticalAddonsOnly taint
-		if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]
+		if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]; then
 			kubectl taint node $(hostname) CriticalAddonsOnly=true:NoExecute-
 		fi
 		# check if K3S install and running
