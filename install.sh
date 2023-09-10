@@ -137,7 +137,7 @@ configuring_ansible () {
 		# Create an ssh key 
 		if [ $CREATE_SSH_KEY == "true" ]; then
 			echo "Create ssh Key and public" 
-			runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa 1> /dev/null'
+			runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa '
 		fi
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
@@ -554,7 +554,6 @@ case $COMMISION_MODE in
 	;;
 	Uninstall)
 		# Import_file_settings
-		k3s_settings_file
 		uninstall_all 
 	;;
 	Quit)
