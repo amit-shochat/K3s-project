@@ -1,7 +1,8 @@
 {
     "AnsibleSettinges": {
         "InstallAnsible": "true",
-        "HaveSshKey": "false",
+        "CreateSshKey": "true",
+        "PassForUser": "",
         "WorkerUser": "amit",
         "WorkerIp": "192.168.122.151 192.168.122.111"
     },

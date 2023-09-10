@@ -110,7 +110,8 @@ K3s_settings_file () {
 
 	#Ansible info
 	ANSIBLE_INSTALL="`jq -r '.AnsibleSettinges.InstallAnsible' $SETTING_FILE`"
-	HAVE_SSH_KEY="`jq -r '.AnsibleSettinges.HaveSshKey' $SETTING_FILE`"
+	CREATE_SSH_KEY="`jq -r '.AnsibleSettinges.CreateSshKey' $SETTING_FILE`"
+	PASS_FOR_USER="`jq -r '.AnsibleSettinges.PassForUser' $SETTING_FILE`"
 	ANSIBLE_NODE_USER="`jq -r '.AnsibleSettinges.WorkerUser' $SETTING_FILE`"
 	ANSIBLE_WORKER_IP=("`jq -r '.AnsibleSettinges.WorkerIp' K3s-settings.json`")
 	
@@ -147,12 +148,12 @@ K3s_settings_file () {
 
 
 Configuring_ansible () {
-	if [ $HAVE_SSH_KEY == "false" ]; then
+	if [ $CREATE_SSH_KEY == "false" ]; then
 		echo "Create ssh Key on Dir ~/.ssh" 
 		runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
 	fi
 	for i in $ANSIBLE_WORKER_IP; do 
-		runuser -l  $(logname) ssh-copy-id $i
+		runuser -l  $(logname) echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i 
 	done
 
 
@@ -292,7 +293,7 @@ EOF
 	kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 	while [[ "$SEC" -lt 600 ]]; do 
 		let SEC++
-		if [[ "$SEC" -eq 100 ]] || [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
 			kubectl delete -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 			kubectl apply -f $ROOT_FOLDER/Argocd_app/Cert-manager.application.yaml
 		fi
@@ -374,7 +375,7 @@ EOF
 		kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
 		while [[ "$SEC" -lt 600 ]]; do 
 			let SEC++
-			if [[ "$SEC" -eq 100 ]] || [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
+			if [[ "$SEC" -eq 2000 ]] || [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
 				kubectl delete -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
 				kubectl apply -f $ROOT_FOLDER/Argocd_app/Metallb.application.yaml
 			fi
@@ -434,7 +435,7 @@ EOF
 		kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
 		while [[ "$SEC" -lt 600 ]]; do 
 			let SEC++
-			if [[ "$SEC" -eq 100 ]] || [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
+			if [[ "$SEC" -eq 2000 ]] || [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
 				kubectl delte -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
 				kubectl apply -f $ROOT_FOLDER/Argocd_app/Ingress-nginx.application.yaml
 			fi
@@ -505,7 +506,7 @@ EOF
 Uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
-	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
+	ansible all -m shell -a 'k3s-agent-uninstall.sh' -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 
 
 	# Remove kubectl 
 	sudo snap remove kubectl &> /dev/null
@@ -536,7 +537,9 @@ Uninstall_all () {
 # 	apt update &> /dev/null
 # 	sudo apt-get install helm -y &> /dev/null
 # fi
-
+if [-z $PASS_FOR_USER ]; then 
+	pass_var=`echo -e 'Please make sure theh worker have a smae user like master with the same password\nPlease enter the password (For the ansible install): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
+fi
 COMMISION_MODE=$(Get_install_mode)  
 case $COMMISION_MODE in 
 	Master)
