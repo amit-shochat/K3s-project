@@ -20,14 +20,12 @@ check_system () {
 
 install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
-        sudo apt-get update  
-        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils" 
-        apt install -y git ssh jq curl apt-transport-https apache2-utils &> /dev/null
-        echo "Install Helm..."
+        sudo apt-get update  1> /dev/null
+        echo "install Pack: git ssh jq curl apt-transport-https apache2-utils Helm" 
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
         sudo apt-get update &> /dev/null
-        sudo apt-get install -y helm &> /dev/null
+        sudo apt-get install -y git ssh jq curl apt-transport-https apache2-utils helm &> /dev/null
 
     elif  [ "$Distributor" = "Centos" ]; then
         yum update && yum upgrade 
@@ -139,26 +137,26 @@ configuring_ansible () {
 		# Create an ssh key 
 		if [ $CREATE_SSH_KEY == "true" ]; then
 			echo "Create ssh Key and public" 
-			runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa'  
+			runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa 1> /dev/null'
 		fi
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
 			echo "copy $(logname) ssh key to worker"
-			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i "
+			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i 1> /dev/null "
 		done
 		# Configur Ansible hosts 
 		echo "Install Ansible and Configuration"
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
 		echo -e "[kuberntes_node]" >> /etc/ansible/hosts
 		for i in $ANSIBLE_WORKER_IP; do 
-			echo -e "$(dig -x $i +short | sed 's/\.//') ansible_host=$i" >> /etc/ansible/hosts
+			echo -e "$(dig -x $i +short | sed 's/\.//') ansible_host=$i" >> /etc/ansible/hosts 
 		done
 
 		# Update Playbook for user name 
 		echo "Run Update playbook for pack update Worker node"
-		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml
+		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml 1> /dev/null
 		
-		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 1> /dev/null
 	fi
 }
 
