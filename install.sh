@@ -537,8 +537,8 @@ Uninstall_all () {
 # 	apt update &> /dev/null
 # 	sudo apt-get install helm -y &> /dev/null
 # fi
-if [-z $PASS_FOR_USER ]; then 
-	pass_var=`echo -e 'Please make sure theh worker have a smae user like master with the same password\nPlease enter the password (For the ansible install): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
+if [ -z $PASS_FOR_USER ]; then 
+	pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
 fi
 COMMISION_MODE=$(Get_install_mode)  
 case $COMMISION_MODE in 
