@@ -170,7 +170,7 @@ configuring_ansible () {
         content: |
           $ANSIBLE_NODE_USER ALL=(ALL) NOPASSWD: ALL
 EOF
-		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 1> /dev/null
+		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
 		echo "Finish install and configuration ansible" 
 	fi
 }
@@ -256,7 +256,8 @@ EOF
 
 install_Argocd () { 
 	# Add Argocd repo
-	echo "Start install ArgoCD" 
+	echo "Start install managment application"
+	echo "install ArgoCD" 
 	helm repo add argo https://argoproj.github.io/argo-helm &> /dev/null
 	helm repo update &> /dev/null
 	# install Argocd Helm chart 
@@ -293,7 +294,8 @@ EOF
 } 
 
 install_Charts () {
-	if [ $CERT_MANAGER_INSTALL == "true" ]; then 
+	if [ $CERT_MANAGER_INSTALL == "true" ]; then
+		echo "install Cert-manager" 
 		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -375,6 +377,81 @@ spec:
     secretName: rootca-selfsigned-crt
 EOF
 	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+
+	cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/Python-server-for-get-tls.Deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-server
+  namespace: cert-manager
+  labels:
+    app: python-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-server
+  template:
+    metadata:
+      labels:
+        app: python-server
+    spec:
+      containers:
+      - name: python-server
+        image: python
+        command:
+        - "sh"
+        - "-c"
+        - |
+          cd /CA
+          python3 -m http.server 8000
+        ports:
+        - containerPort: 8000
+        resources:
+        volumeMounts:
+          - mountPath: "/CA/$CERT_MANAGER_LOCAL_DOMAIN_NAME.crt"
+            name: k3s-local-cert-rootca
+            subPath: klika.local_ca.crt
+            readOnly: true
+      volumes:
+        - name: k3s-local-cert-rootca
+          secret:
+            secretName: rootca-selfsigned-crt
+            items:
+              - key: tls.crt
+                path: $CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: local-domain-self-signed
+    kubernetes.io/tls-acme: "true"
+  labels:
+    app: python-server
+  name: python-cert-ingress
+  namespace: cert-manager
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: cert.$CERT_MANAGER_LOCAL_DOMAIN_NAME
+    http:
+      paths:
+      - backend:
+          service:
+            name: python-service
+            port:
+              name: python-service
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - "cert.$CERT_MANAGER_LOCAL_DOMAIN_NAME"
+    secretName: cert-python-secret
+
+EOF
+	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Python-server-for-get-tls.Deployment.yaml
+	echo "Finish install Cert-manager"
 	fi
 
 	if [ $METALLB_INSTALL == "true" ]; then

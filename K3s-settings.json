@@ -26,7 +26,7 @@
     "MetalLBSettings": {
         "InstallMetallLB": "true",
         "MetalLBVersion": "0.13.10",
-        "MetalLBIpRang": "172.16.198.1 - 172.16.198.250"
+        "MetalLBIpRang": "192.168.122.10 - 192.168.122.250"
     },
     "IngressNginxSettings": {
         "InastallIngressNginx": "true",
