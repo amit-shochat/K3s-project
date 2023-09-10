@@ -22,7 +22,7 @@ Install_pack () {
     if [ "$Distributor" = "Ubuntu" ]; then
         sudo apt-get update  
         echo "install Pack: git ssh jq curl apt-transport-https apache2-utils ansible sshpass" 
-        apt install -y git ssh jq curl apt-transport-https apache2-utils ansible  &> /dev/null
+        apt install -y git ssh jq curl apt-transport-https apache2-utils ansible sshpass &> /dev/null
         echo "Install Helm..."
         curl -s https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &>/dev/null
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
@@ -110,8 +110,10 @@ K3s_settings_file () {
 
 	#Ansible info
 	ANSIBLE_INSTALL="`jq -r '.AnsibleSettinges.InstallAnsible' $SETTING_FILE`"
+	Have_SSH_KEY="`jq -r '.AnsibleSettinges.HaveSshKey' $SETTING_FILE`"
 	ANSIBLE_NODE_USER="`jq -r '.AnsibleSettinges.WorkerUser' $SETTING_FILE`"
 	ANSIBLE_WORKER_IP=("`jq -r '.AnsibleSettinges.WorkerIp' K3s-settings.json`")
+	
 
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
@@ -145,8 +147,15 @@ K3s_settings_file () {
 
 
 Configuring_ansible () {
-	echo "test test test"
-	echo "$ANSIBLE_INSTALL"
+	if [ $ANSIBLE_INSTALL == "false" ]; then
+		echo " Create ssh Key on Dir ~/.ssh" 
+		runuser -u $ANSIBLE_NODE_USER ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa
+	fi
+	for i in $ANSIBLE_WORKER_IP; do 
+		runuser -u $ANSIBLE_NODE_USER ssh-copy-id $i 
+	done
+
+
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo "Install Ansible and Configur"
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
@@ -159,7 +168,7 @@ Configuring_ansible () {
 		echo "Run Updare playbook for update Worker node"
 		sed -i "s/REPLACE_ME_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml
 		
-		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $ANSIBLE_NODE_USER -kK 
+		ansible-playbook $ROOT_FOLDER/Ansible-Playbook/Playbook-update.yaml -u $ANSIBLE_NODE_USER ##-kK 
 	fi
 }
 
