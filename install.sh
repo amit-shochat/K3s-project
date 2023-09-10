@@ -82,8 +82,7 @@ k3s_settings_file () {
 	done
 
 	if (( ${#empty[@]} )); then
-		k3s-uninstall.sh &> /dev/null
-		echo -e "\nList of the empty var in $filename: \n$(for i in "${empty[@]}"; do echo ">> $i" ; done) \n\nPlease fill them and start agine"
+		echo -e "\nList of the empty var in $filename: \n$(for i in "${empty[@]}"; do echo ">> $i" ; done)"
 	fi
 
 	#Ansible info
@@ -172,7 +171,7 @@ configuring_ansible () {
           $ANSIBLE_NODE_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa 1> /dev/null
-		echo " Finish install and configuration ansible" 
+		echo "Finish install and configuration ansible" 
 	fi
 }
 
@@ -561,6 +560,9 @@ uninstall_all () {
 	# uninstall Helm 
 	apt purge helm --yes &> /dev/null
 
+	# Remove yaml folder 
+	rm -rf $ROOT_FOLDER/Yaml_files &> /dev/null
+
 }
 
 ###################
@@ -571,15 +573,6 @@ uninstall_all () {
 # Check if user is Root
 [ "$UID" -eq 0 ] || { echo -e "\nThis script must be run as root.\nPlease use sudo user and try again"; exit 1;}
 
-
-# helm_flag=`which helm`
-# if [ -z $curl_flag ]; then
-# 	echo "installing curl"
-# 	curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg &> /dev/null
-# 	echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list &> /dev/null
-# 	apt update &> /dev/null
-# 	sudo apt-get install helm -y &> /dev/null
-# fi
 COMMISION_MODE=$(get_install_mode)  
 case $COMMISION_MODE in 
 	Master)
