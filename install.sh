@@ -560,6 +560,7 @@ EOF
 	echo "Finish Deploy letsencrypt ClusterIssuet"
 	echo "Finish install Cert-manager"
 	fi
+	fi
 }
 
 install_metallb () {
