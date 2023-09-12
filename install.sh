@@ -13,7 +13,7 @@ check_system () {
     CPU_Architecture=`dpkg --print-architecture`
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
-	mkdir -p $ROOT_FOLDER/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook}
+	mkdir -p $ROOT_FOLDER/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook,Duckdns}
 }
 
 get_install_mode () {
