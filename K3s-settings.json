@@ -8,7 +8,8 @@
     },
     "KubernetesOption": {
         "K3sVersion": "",
-        "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage"
+        "ExtraSettings": " --disable=traefik --disable servicelb --node-taint CriticalAddonsOnly=true:NoExecute --disable local-storage",
+        "TimeZone": "Asia/Jerusalem"
     },
     "ArgoCDSettings": {
         "InstallArgoCDCli": "true",
@@ -29,7 +30,8 @@
     },
     "DuckDns": {
         "ApllyDockDns": "true",
-        "DuckDnsEmail": ""
+        "DuckDnsToken": "",
+        "DuckDnsSubDomain": ""
     },
     "MetalLBSettings": {
         "InstallMetallLB": "true",

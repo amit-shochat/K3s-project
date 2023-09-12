@@ -80,6 +80,7 @@ k3s_settings_file () {
 	# Kubernetes info
 	INSTALL_K3S_VERSION="`jq -r '.KubernetesOption.K3sVersion' $SETTING_FILE`"
 	K3S_EXTRA_ARG="`jq -r '.KubernetesOption.ExtraSettings' $SETTING_FILE`"
+	K3S_TIME_ZONE="`jq -r '.KubernetesOption.TimeZone' $SETTING_FILE`"
 	
 	#ArgocdCD ifno
 	ARGOCD_VERSION="`jq -r '.ArgoCDSettings.ArgoCDVersion' $SETTING_FILE`"		
@@ -100,7 +101,8 @@ k3s_settings_file () {
 
 	# Duckdns info
 	DOCKDNS_APPLY="`jq -r '.DuckDns.ApllyDockDns' $SETTING_FILE`"
-	DOCKDNS_EMAIL="`jq -r '.DuckDns.DuckDnsEmail' $SETTING_FILE`"
+	DOCKDNS_TOKEN="`jq -r '.DuckDns.DuckDnsToken' $SETTING_FILE`"
+	DOCKDNS_SUB_DOMAIN="`jq -r '.DuckDns.DuckDnsSubDomain' $SETTING_FILE`"
 
 	#MetalLB info
 	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"
@@ -671,8 +673,51 @@ EOF
 		fi
 		sleep 1
 	done
-
 }
+
+install_dockdns () {
+	if [ $DOCKDNS_APPLY == "true" ]; then
+		kubectl create ns dockdns
+		kubectl -n dockdns create secret generic dockdns-token --from-literal=token=$DOCKDNS_TOKEN
+		cat << EOF > $ROOT_FOLDER/Yaml_files/Duckdns/duckdns.deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duckdns-deployment
+  namespace: home-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: duckdns
+  template:
+    metadata:
+      labels:
+        app: duckdns
+    spec:
+      containers:
+      - name: duckdns
+        image: lscr.io/linuxserver/duckdns:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: duckdns
+              key: token
+        - name: SUBDOMAINS
+          value: $DOCKDNS_SUB_DOMAIN
+        - name: TZ
+          value: $K3S_TIME_ZONE
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "500Mi"
+EOF
+		kubectl apply -f $ROOT_FOLDER/Yaml_files/Duckdns/duckdns.deployment.yaml
+	fi
+
+} 
 uninstall_all () {
     # Uninstall K3s
     k3s-uninstall.sh &> /dev/null 
