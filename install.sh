@@ -760,6 +760,7 @@ case $COMMISION_MODE in
 		install_cert_manager
 		install_metallb
 		install_ingress_nginx
+		install_dockdns
 		update_argo_chart
 	;;
 	Node)
