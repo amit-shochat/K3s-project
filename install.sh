@@ -131,7 +131,7 @@ install_pack () {
 
 configuring_ansible () {
 	if [ $ANSIBLE_INSTALL == "true" ]; then
-		echo -e "\n Install and configuration ansible"
+		echo -e "\nInstall and configuration ansible"
 		
 		# Create Ansible folder 
 		mkdir -p $ROOT_FOLDER/Configured_yamls/Ansible-Playbook
@@ -231,7 +231,7 @@ install_Argocd () {
 	echo "install ArgoCD" 
 	helm repo add argo https://argoproj.github.io/argo-helm &> /dev/null
 	helm repo update &> /dev/null
-	
+
 	# install Argocd Helm chart
 	ARGOCD_ADMIN_PASSWORD_BCRYPT=`htpasswd -nbBC 10 "" $ARGOCD_ADMIN_PASSWORD | tr -d ':\n' | sed 's/$2y/$2a/'`
 	helm install argocd argo/argo-cd \
