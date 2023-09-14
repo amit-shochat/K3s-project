@@ -5,7 +5,7 @@ metadata:
   namespace: cert-manager
 spec:
   isCA: true
-  duration: 8760 # 1 year
+  duration: 8760h # 1 year
   renewBefore: 360h # 15d
   commonName: CERT_MANAGER_LOCAL_DOMAIN_NAME
   secretName: rootca-selfsigned-crt

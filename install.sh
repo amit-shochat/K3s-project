@@ -391,8 +391,17 @@ install_duckdns () {
 	# Deploy DockDns for update IP on FQDN 
 	if [ $DUCKDNS_APPLY == "true" ]; then
 		echo "Deploy Duckdns app for update IP on FQDN"
+
+		# Create Metallb folder for configured files 
+		mkdir -p $ROOT_FOLDER/Configured_yamls/Argocd_application/Duckdns
+
+		# Create NS Dockdns
 		kubectl create ns duckdns
+
+		# Create TOKEN secret for Dockdns
 		kubectl -n duckdns create secret generic duckdns-token --from-literal=token=$DUCKDNS_TOKEN
+
+		# Configued deployment files and apply to cluster 
 		sed "s/DUCKDNS_SUB_DOMAIN/$DUCKDNS_SUB_DOMAIN/g" $ROOT_FOLDER/Default_yamls/Argocd_application/Duckdns/duckdns.deployment.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_application/Duckdns/duckdns.deployment.yaml
 		sed -i "s/K3S_TIME_ZONE/$K3S_TIME_ZONE/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Duckdns/duckdns.deployment.yaml
 		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Duckdns/duckdns.deployment.yaml
@@ -444,6 +453,7 @@ case $COMMISION_MODE in
 		install_ingress_nginx
 		install_duckdns
 		update_argo_chart
+		chmod $(logname):$(logname) -R $ROOT_FOLDER/Configured_yamls &> /dev/null
 	;;
 	Node)
 		# create log file
