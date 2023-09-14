@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: duckdns-deployment
-  namespace: home-assistant
+  namespace: duckdns
 spec:
   replicas: 1
   selector:

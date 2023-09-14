@@ -453,7 +453,7 @@ case $COMMISION_MODE in
 		install_ingress_nginx
 		install_duckdns
 		update_argo_chart
-		chmod $(logname):$(logname) -R $ROOT_FOLDER/Configured_yamls &> /dev/null
+		chmod $(logname):$(logname) -R $ROOT_FOLDER/Configured_yamls 
 	;;
 	Node)
 		# create log file
