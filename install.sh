@@ -13,7 +13,6 @@ check_system () {
     CPU_Architecture=`dpkg --print-architecture`
     Distributor=`lsb_release -d | awk '{print $2}'`
     Release=`lsb_release -r | awk '{print $2}'`
-	mkdir -p $ROOT_FOLDER/Yaml_files/{Argocd_app,Cert-manager,Ansible-Playbook,Duckdns}
 }
 
 get_install_mode () {
@@ -100,9 +99,9 @@ k3s_settings_file () {
 	LETSENCRYPT_EMAIL="`jq -r '.LetsEncrypt.LetsEncryptEmail' $SETTING_FILE`"
 
 	# Duckdns info
-	DOCKDNS_APPLY="`jq -r '.DuckDns.ApllyDockDns' $SETTING_FILE`"
-	DOCKDNS_TOKEN="`jq -r '.DuckDns.DuckDnsToken' $SETTING_FILE`"
-	DOCKDNS_SUB_DOMAIN="`jq -r '.DuckDns.DuckDnsSubDomain' $SETTING_FILE`"
+	DUCKDNS_APPLY="`jq -r '.DuckDns.ApllyDuckDns' $SETTING_FILE`"
+	DUCKDNS_TOKEN="`jq -r '.DuckDns.DuckDnsToken' $SETTING_FILE`"
+	DUCKDNS_SUB_DOMAIN="`jq -r '.DuckDns.DuckDnsSubDomain' $SETTING_FILE`"
 
 	#MetalLB info
 	METALLB_INSTALL="`jq -r '.MetalLBSettings.InstallMetallLB' $SETTING_FILE`"
@@ -133,6 +132,10 @@ install_pack () {
 configuring_ansible () {
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo -e "\n Install and configuration ansible"
+		
+		# Create Ansible folder 
+		mkdir -p $ROOT_FOLDER/Configured_yamls/Ansible-Playbook
+		
 		# Insatall Pack 
 		apt install -y  ansible sshpass &> /dev/null
 		# Enter sudo pasowrd user for Ansible install
@@ -140,16 +143,19 @@ configuring_ansible () {
 			pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
 			echo
 		fi
+
 		# Create an ssh key 
 		if [ $CREATE_SSH_KEY == "true" ]; then
 			echo "Create ssh Key and public" 
 			runuser -l $(logname) -c 'ssh-keygen -q -b 2048 -t rsa -N "" -f ~/.ssh/id_rsa '
 		fi
+
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
 			echo "copy User: $(logname) ssh key to worker $(dig -x $i +short | sed 's/\.//')_$i"
 			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i &> /dev/null"
 		done
+
 		# Configur Ansible hosts 
 		echo "Install Ansible and Configuration"
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
@@ -157,28 +163,12 @@ configuring_ansible () {
 		for i in $ANSIBLE_WORKER_IP; do 
 			echo -e "$(dig -x $i +short | sed 's/\.//') ansible_host=$i" >> /etc/ansible/hosts 
 		done
+		
 		# Update Playbook for user name 
 		echo "Run Update playbook for pack update Worker node"
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml
----
-- hosts: kuberntes_node
-  become: true
-  become_user: root
-
-  tasks:
-    - name: Update apt repo and cache on all Debian/Ubuntu boxes
-      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
-
-    - name: Upgrade all packages on servers
-      apt: upgrade=dist force_apt_get=yes
-
-    - name: Creating a file For Root Ansible
-      copy:
-        dest: "/etc/sudoers.d/$ANSIBLE_NODE_USER"
-        content: |
-          $ANSIBLE_NODE_USER ALL=(ALL) NOPASSWD: ALL
-EOF
-		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
+		sed "s/ANSIBLE_NODE_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Default_yamls/Ansible-Playbook/Playbook-update.yaml > $ROOT_FOLDER/Configured_yamls/Ansible-Playbook/Playbook-update.yaml
+		sed -i "s/ANSIBLE_NODE_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Configured_yamls/Ansible-Playbook/Playbook-update.yaml
+		ansible-playbook $ROOT_FOLDER/Configured_yamls/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
 		echo "Finish install and configuration ansible" 
 	fi
 }
@@ -227,39 +217,12 @@ install_k3s () {
 	# Ansible add nodes
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo "Install K3s Worker agent" 
-		local K3S_TOKEN="`cat /var/lib/rancher/k3s/server/node-token`"
-		local K3S_URL="`hostname -I | awk '{print $1}'`"
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-install_k3s-agent.yaml
----
-- hosts: kuberntes_node
-  become: true
-  become_user: root
-
-  tasks:
-    - name: Update apt repo and cache on all Debian/Ubuntu boxes
-      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
-
-    - name: Upgrade all packages on servers
-      apt: upgrade=dist force_apt_get=yes
-
-    - name : Install multiple packages
-      apt: name={{ item }} state=latest update_cache=true
-      loop: [git, wget, unzip, curl, ssh, jq, apt-transport-https, apache2-utils] 
-
-
-    - name: Creating multiple files
-      shell: curl -sfL https://get.k3s.io | K3S_URL=https://$K3S_URL:6443 K3S_TOKEN=$K3S_TOKEN sh -
-      args:
-        warn: no
-
-    - name: Check for apache status
-      shell: systemctl status k3s-agent.service
-      args:
-        warn: no
-EOF
-		ansible-playbook $ROOT_FOLDER/Yaml_files/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
+		local K3S_TOKEN_KEY="`cat /var/lib/rancher/k3s/server/node-token`"
+		local K3S_URL_IP="`hostname -I | awk '{print $1}'`"
+		sed "s/K3S_URL_IP/$K3S_URL_IP/g" $ROOT_FOLDER/Default_yamls/Ansible-Playbook/Playbook-install_k3s-agent.yaml > $ROOT_FOLDER/Configured_yamls/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+		sed -i "s/K3S_TOKEN_KEY/$K3S_TOKEN_KEY/g" $ROOT_FOLDER/Configured_yamls/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+		ansible-playbook $ROOT_FOLDER/Configured_yamls/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
 	fi
-
 }
 
 install_Argocd () { 
@@ -268,6 +231,7 @@ install_Argocd () {
 	echo "install ArgoCD" 
 	helm repo add argo https://argoproj.github.io/argo-helm &> /dev/null
 	helm repo update &> /dev/null
+	
 	# install Argocd Helm chart
 	ARGOCD_ADMIN_PASSWORD_BCRYPT=`htpasswd -nbBC 10 "" $ARGOCD_ADMIN_PASSWORD | tr -d ':\n' | sed 's/$2y/$2a/'`
 	helm install argocd argo/argo-cd \
@@ -282,260 +246,66 @@ install_Argocd () {
 		chmod +x /usr/local/bin/argocd
 	fi
 	echo -e "Install ArgoCD Project's" 
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Infrastructure.project.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: AppProject
-metadata:
-  name: infrastructure
-  namespace: argocd
-spec:
-  clusterResourceWhitelist:
-  - group: '*'
-    kind: '*'
-  destinations:
-  - namespace: '*'
-    server: '*'
-  sourceRepos:
-  - '*'
-EOF
-	kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Infrastructure.project.yaml	 
+	mkdir -p $ROOT_FOLDER/Configured_yamls/Argocd_app
+	cp $ROOT_FOLDER/Default_yamls/Argocd_app/Infrastructure.project.yaml $ROOT_FOLDER/Configured_yamls/Argocd_app/Infrastructure.project.yaml
+	kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Infrastructure.project.yaml	 
 	echo "Finish install ArgoCD"
 } 
 
 install_cert_manager () {
 	if [ $CERT_MANAGER_INSTALL == "true" ]; then
 		echo "install Cert-manager" 
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: cert-manager
-  namespace: argocd
-spec:
-  destination:
-    namespace: cert-manager
-    server: https://kubernetes.default.svc
-  project: infrastructure
-  source:
-    chart: cert-manager
-    helm:
-      parameters:
-        - name: installCRDs
-          value: "true"
-    repoURL: https://charts.jetstack.io
-    targetRevision: $CERT_MANAGER_VERSION
-  syncPolicy:
-    automated:
-       selfHeal: true
-       prune: true
-    syncOptions:
-      - CreateNamespace=true
-EOF
-	kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
-	while [[ "$SEC" -lt 600 ]]; do 
-		let SEC++
-		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
-			kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
-			kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Cert-manager.application.yaml
+		# Edit Cert-manager application yaml
+		sed "s/CERT_MANAGER_VERSION/$CERT_MANAGER_VERSION/g" $ROOT_FOLDER/Default_yamls/Argocd_app/Cert-manager.application.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_app/Cert-manager.application.yaml
+		# Wiat until all Cert-manager pod are running
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Cert-manager.application.yaml
+		while [[ "$SEC" -lt 600 ]]; do 
+			let SEC++
+			if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+				kubectl delete -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Cert-manager.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Cert-manager.application.yaml
+			fi
+			if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+				unset SEC
+				break
+			fi
+			sleep 1
+		done
+		# Create Self-signed issuer for rootCA
+		cp $ROOT_FOLDER/Default_yamls/Cert-manager/selfsigned.issuer.yaml $ROOT_FOLDER/Configured_yamls/Cert-manager/selfsigned.issuer.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Cert-manager/selfsigned.issuer.yaml
+
+		# Create local-domain ClusterIssuer and root CA Certificate
+		sed "s/CERT_MANAGER_LOCAL_DOMAIN_NAME/$CERT_MANAGER_LOCAL_DOMAIN_NAME/g" $ROOT_FOLDER/Default_yamls/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml > $ROOT_FOLDER/Configured_yamls/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
+
+		#Create web Python server Deployment\server\ingress to get TLS cert
+		sed "s/CERT_MANAGER_LOCAL_DOMAIN_NAME/$CERT_MANAGER_LOCAL_DOMAIN_NAME/g" $ROOT_FOLDER/Default_yamls/Cert-manager/Python-server-for-get-tls.Deployment.yaml > $ROOT_FOLDER/Configured_yamls/Cert-manager/Python-server-for-get-tls.Deployment.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Cert-manager/Python-server-for-get-tls.Deployment.yaml
+		echo "Finish Deploy Python-cert-server"
+		
+		# Deploy letsencrypt ClusterIssuet
+		if [ $LETSENCRYPT_APPLY == "true" ]; then
+			echo "Deploy letsencrypt ClusterIssuet"
+			sed "s/LETSENCRYPT_EMAIL/$LETSENCRYPT_EMAIL/g" $ROOT_FOLDER/Default_yamls/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml > $ROOT_FOLDER/Configured_yamls/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml
+			kubectl apply -f $ROOT_FOLDER/Configured_yamls/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml
+			echo "Finish Deploy letsencrypt ClusterIssuet"
 		fi
-		if [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications cert-manager -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
-			unset SEC
-			break
-		fi
-		sleep 1
-	done
-
-	# Create Self-signed crt for rootCA
-	cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/selfsigned.issuer.yaml
-apiVersion: cert-manager.io/v1
-kind: Issuer
-metadata:
-  name: selfsigned-issuer
-  namespace: cert-manager
-spec:
-  selfSigned: {}
-EOF
-	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/selfsigned.issuer.yaml
-
-	# Create local-domain issuer 
-	cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: rootca-selfsigned-crt
-  namespace: cert-manager
-spec:
-  isCA: true
-  commonName: $CERT_MANAGER_LOCAL_DOMAIN_NAME
-  secretName: rootca-selfsigned-crt
-  privateKey:
-    algorithm: ECDSA
-    size: 256
-  issuerRef:
-    name: selfsigned-issuer
-    kind: Issuer
-    group: cert-manager.io
----
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: local-domain-self-signed
-  namespace: cert-manager
-spec:
-  ca:
-    secretName: rootca-selfsigned-crt
-EOF
-	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Local-domain.ClusterIssuer_and_certificate.yaml
-
-	cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/Python-server-for-get-tls.Deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: python-server
-  namespace: cert-manager
-  labels:
-    app: python-server
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: python-server
-  template:
-    metadata:
-      labels:
-        app: python-server
-    spec:
-      containers:
-      - name: python-server
-        image: python
-        command:
-        - "sh"
-        - "-c"
-        - |
-          cd /CA
-          python3 -m http.server 8000
-        ports:
-        - containerPort: 8000
-        resources:
-        volumeMounts:
-          - mountPath: "/CA/$CERT_MANAGER_LOCAL_DOMAIN_NAME.crt"
-            name: k3s-local-cert-rootca
-            subPath: $CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
-            readOnly: true
-      volumes:
-        - name: k3s-local-cert-rootca
-          secret:
-            secretName: rootca-selfsigned-crt
-            items:
-              - key: tls.crt
-                path: $CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: python-service
-  namespace: cert-manager
-spec:
-  selector: 
-    app: python-server
-  type: ClusterIP  
-  ports:
-    - name: python-service
-      port: 443
-      targetPort: 8000
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    cert-manager.io/cluster-issuer: local-domain-self-signed
-    kubernetes.io/tls-acme: "true"
-  labels:
-    app: python-server
-  name: python-cert-ingress
-  namespace: cert-manager
-spec:
-  ingressClassName: nginx
-  rules:
-  - host: cert.$CERT_MANAGER_LOCAL_DOMAIN_NAME
-    http:
-      paths:
-      - backend:
-          service:
-            name: python-service
-            port:
-              name: python-service
-        path: /
-        pathType: Prefix
-  tls:
-  - hosts:
-    - "cert.$CERT_MANAGER_LOCAL_DOMAIN_NAME"
-    secretName: cert-python-secret
-EOF
-	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Python-server-for-get-tls.Deployment.yaml
-	echo "Finish Deploy Python-cert-server"
-	if [ $LETSENCRYPT_APPLY == "true" ]; then
-		echo "Deploy letsencrypt ClusterIssuet"
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-production
-spec:
-  acme:
-    # The ACME server URL
-    server: https://acme-v02.api.letsencrypt.org/directory
-    # Email address used for ACME registration
-    email: $LETSENCRYPT_EMAIL
-    # Name of a secret used to store the ACME account private key
-    privateKeySecretRef:
-      name: letsencrypt-prod
-    # Enable the HTTP-01 challenge provider
-    solvers:
-    - http01:
-        ingress:
-          class: nginx
-EOF
-	kubectl apply -f $ROOT_FOLDER/Yaml_files/Cert-manager/Letsencrypt.ClusterIssuer-production.yaml
-	echo "Finish Deploy letsencrypt ClusterIssuet"
-	echo "Finish install Cert-manager"
-	fi
+		echo "Finish install Cert-manager"
 	fi
 }
 
 install_metallb () {
 	if [ $METALLB_INSTALL == "true" ]; then
 		echo "Deploy Metallb"
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: metallb
-  namespace: argocd
-spec:
-  project: infrastructure
-  source:
-    repoURL: https://metallb.github.io/metallb
-    targetRevision: $METALLB_VERSION
-    chart: metallb
-    helm:
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: metallb-system
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-    automated:
-      prune: true
-      allowEmpty: true
-      selfHeal: true
-EOF
-		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
+		# Deploy Metallb and with until running 
+		sed "s/METALLB_VERSION/$METALLB_VERSION/g" $ROOT_FOLDER/Default_yamls/Argocd_app/Metallb.application.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_app/Metallb.application.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Metallb.application.yaml
 		while [[ "$SEC" -lt 600 ]]; do 
 			let SEC++
 			if [[ "$SEC" -eq 2000 ]] || [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
-				kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
-				kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.application.yaml
+				kubectl delete -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Metallb.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Metallb.application.yaml
 			fi
 			if [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications metallb -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 				unset SEC
@@ -543,25 +313,9 @@ EOF
 			fi
 			sleep 1
 		done
-
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.ip-reang.yaml
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
-metadata:
-  name: k3s-range
-  namespace: metallb-system
-spec:
-  addresses:
-  - $METALLB_IP_RANG
----
-
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: k3s-range
-  namespace: metallb-system
-EOF
-		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Metallb.ip-reang.yaml 
+		# Deploy Metallb IP rang 
+		sed "s/METALLB_IP_RANG/$METALLB_IP_RANG/g" $ROOT_FOLDER/Default_yamls/Metallb/Metallb.ip-reang.yaml > $ROOT_FOLDER/Configured_yamls/Metallb/Metallb.ip-reang.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Metallb/Metallb.ip-reang.yaml
 		echo "Finish Deploy Metallb"
 	fi
 }
@@ -569,36 +323,13 @@ install_ingress_nginx () {
 	echo "Deploy Ingress Nginx"
 	# Insatll ingress-nginx helm 
 	if [ $INGRESS_NGINX_INSTALL == "true" ]; then
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: ingress-nginx
-  namespace: argocd
-spec:
-  project: infrastructure
-  source:
-    repoURL: https://kubernetes.github.io/ingress-nginx
-    targetRevision: $INGRESS_NGINX_VERSION
-    chart: ingress-nginx
-    helm:
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: ingress-nginx
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-    automated:
-      prune: true
-      allowEmpty: true
-      selfHeal: true
-EOF
-		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
+		sed "s/INGRESS_NGINX_VERSION/$INGRESS_NGINX_VERSION/g" $ROOT_FOLDER/Default_yamls/Ingress-nginx/Ingress-nginx.application.yaml > $ROOT_FOLDER/Configured_yamls/Ingress-nginx/Ingress-nginx.application.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Ingress-nginx.application.yaml
 		while [[ "$SEC" -lt 600 ]]; do 
 			let SEC++
 			if [[ "$SEC" -eq 2000 ]] || [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then 
-				kubectl delte -f $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
-				kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Ingress-nginx.application.yaml
+				kubectl delte -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Ingress-nginx.application.yaml
+				kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Ingress-nginx.application.yaml
 			fi
 			if [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications ingress-nginx -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 				unset SEC
@@ -611,61 +342,17 @@ EOF
 }
 
 update_argo_chart() {
-	cat << EOF > $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: argocd
-  namespace: argocd
-spec:
-  project: infrastructure
-  source:
-    repoURL: https://argoproj.github.io/argo-helm
-    targetRevision: $ARGOCD_VERSION
-    chart: argo-cd
-    helm:
-      values: | 
-        server:
-          ingress:
-            enabled: true
-            ingressClassName: "nginx"
-            path: /
-            hosts:
-              - argo.$CERT_MANAGER_LOCAL_DOMAIN_NAME
-            annotations:
-              cert-manager.io/cluster-issuer: local-domain-self-signed
-              kubernetes.io/tls-acme: "true"
-              nginx.ingress.kubernetes.io/backend-protocol: HTTPS
-              nginx.ingress.kubernetes.io/ssl-passthrough: "true"
-            labels: {}
-            tls: 
-             - secretName: argo-crt
-               hosts:
-                 - argocd.$CERT_MANAGER_LOCAL_DOMAIN_NAME
-      parameters:
-      - name: "server.service.type"
-        value: LoadBalancer
-      - name: "configs.secret.argocdServerAdminPassword"
-        value: $ARGOCD_ADMIN_PASSWORD_BCRYPT
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-    automated:
-      prune: true
-      allowEmpty: true
-      selfHeal: true
-EOF
-		kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-
+	# Deploy Argocd to Argo UI 
+	sed "s/ARGOCD_VERSION/$ARGOCD_VERSION/g" $ROOT_FOLDER/Default_yamls/Argocd_app/Argocd-application.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_app/Argocd-application.yaml
+	sed -i "s/CERT_MANAGER_LOCAL_DOMAIN_NAME/$CERT_MANAGER_LOCAL_DOMAIN_NAME/g" $ROOT_FOLDER/Configured_yamls/Argocd_app/Argocd-application.yaml
+	sed -i "s/ARGOCD_ADMIN_PASSWORD_BCRYPT/$ARGOCD_ADMIN_PASSWORD_BCRYPT/g" $ROOT_FOLDER/Configured_yamls/Argocd_app/Argocd-application.yaml
+	kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Argocd-application.yaml
 	while [[ "$SEC" -lt 600 ]]; do 
 		let SEC++
 		if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
 			echo -e "\n Argocd apllication status unknown, delete and try agin"
-			kubectl delete -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
-			kubectl apply -f $ROOT_FOLDER/Yaml_files/Argocd_app/Argocd-application.yaml
+			kubectl delete -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Argocd-application.yaml
+			kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_app/Argocd-application.yaml
 		fi
 		if [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
 			unset SEC
@@ -675,46 +362,14 @@ EOF
 	done
 }
 
-install_dockdns () {
-	if [ $DOCKDNS_APPLY == "true" ]; then
-		kubectl create ns dockdns
-		kubectl -n dockdns create secret generic dockdns-token --from-literal=token=$DOCKDNS_TOKEN
-		cat << EOF > $ROOT_FOLDER/Yaml_files/Duckdns/duckdns.deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: duckdns-deployment
-  namespace: home-assistant
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: duckdns
-  template:
-    metadata:
-      labels:
-        app: duckdns
-    spec:
-      containers:
-      - name: duckdns
-        image: lscr.io/linuxserver/duckdns:latest
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: duckdns
-              key: token
-        - name: SUBDOMAINS
-          value: $DOCKDNS_SUB_DOMAIN
-        - name: TZ
-          value: $K3S_TIME_ZONE
-        resources:
-          limits:
-            cpu: "500m"
-            memory: "500Mi"
-EOF
-		kubectl apply -f $ROOT_FOLDER/Yaml_files/Duckdns/duckdns.deployment.yaml
+install_duckdns () {
+	# Deploy DockDns image for update IP on FQDN 
+	if [ $DUCKDNS_APPLY == "true" ]; then
+		kubectl create ns duckdns
+		kubectl -n duckdns create secret generic duckdns-token --from-literal=token=$DUCKDNS_TOKEN
+		sed "s/DUCKDNS_SUB_DOMAIN/$DUCKDNS_SUB_DOMAIN/g" $ROOT_FOLDER/Default_yamls/Duckdns/duckdns.deployment.yaml > $ROOT_FOLDER/Configured_yamls/Duckdns/duckdns.deployment.yaml
+		sed -i "s/K3S_TIME_ZONE/$K3S_TIME_ZONE/g" $ROOT_FOLDER/Configured_yamls/Duckdns/duckdns.deployment.yaml
+		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Duckdns/duckdns.deployment.yaml
 	fi
 
 } 
@@ -734,7 +389,7 @@ uninstall_all () {
 	apt purge helm --yes &> /dev/null
 
 	# Remove yaml folder 
-	rm -rf $ROOT_FOLDER/Yaml_files &> /dev/null
+	rm -rf $ROOT_FOLDER/Configured_yamls &> /dev/null
 
 	echo -e "Finish remove all deployment and file" 
 
@@ -760,7 +415,7 @@ case $COMMISION_MODE in
 		install_cert_manager
 		install_metallb
 		install_ingress_nginx
-		install_dockdns
+		install_duckdns
 		update_argo_chart
 	;;
 	Node)

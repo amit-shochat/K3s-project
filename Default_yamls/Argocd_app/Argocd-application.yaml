@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://argoproj.github.io/argo-helm
+    targetRevision: ARGOCD_VERSION
+    chart: argo-cd
+    helm:
+      values: | 
+        server:
+          ingress:
+            enabled: true
+            ingressClassName: "nginx"
+            path: /
+            hosts:
+              - argo.CERT_MANAGER_LOCAL_DOMAIN_NAME
+            annotations:
+              cert-manager.io/cluster-issuer: local-domain-self-signed
+              kubernetes.io/tls-acme: "true"
+              nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+              nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+            labels: {}
+            tls: 
+             - secretName: argo-crt
+               hosts:
+                 - argocd.CERT_MANAGER_LOCAL_DOMAIN_NAME
+      parameters:
+      - name: "server.service.type"
+        value: LoadBalancer
+      - name: "configs.secret.argocdServerAdminPassword"
+        value: ARGOCD_ADMIN_PASSWORD_BCRYPT
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true

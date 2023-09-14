@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: duckdns-deployment
+  namespace: home-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: duckdns
+  template:
+    metadata:
+      labels:
+        app: duckdns
+    spec:
+      containers:
+      - name: duckdns
+        image: lscr.io/linuxserver/duckdns:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: duckdns
+              key: token
+        - name: SUBDOMAINS
+          value: DUCKDNS_SUB_DOMAIN
+        - name: TZ
+          value: K3S_TIME_ZONE
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "500Mi"

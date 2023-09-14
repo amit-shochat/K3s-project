@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-server
+  namespace: cert-manager
+  labels:
+    app: python-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: python-server
+  template:
+    metadata:
+      labels:
+        app: python-server
+    spec:
+      containers:
+      - name: python-server
+        image: python
+        command:
+        - "sh"
+        - "-c"
+        - |
+          cd /CA
+          python3 -m http.server 8000
+        ports:
+        - containerPort: 8000
+        resources:
+        volumeMounts:
+          - mountPath: "/CA/CERT_MANAGER_LOCAL_DOMAIN_NAME.crt"
+            name: k3s-local-cert-rootca
+            subPath: CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
+            readOnly: true
+      volumes:
+        - name: k3s-local-cert-rootca
+          secret:
+            secretName: rootca-selfsigned-crt
+            items:
+              - key: tls.crt
+                path: CERT_MANAGER_LOCAL_DOMAIN_NAME.crt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-service
+  namespace: cert-manager
+spec:
+  selector: 
+    app: python-server
+  type: ClusterIP  
+  ports:
+    - name: python-service
+      port: 443
+      targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: local-domain-self-signed
+    kubernetes.io/tls-acme: "true"
+  labels:
+    app: python-server
+  name: python-cert-ingress
+  namespace: cert-manager
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: cert.CERT_MANAGER_LOCAL_DOMAIN_NAME
+    http:
+      paths:
+      - backend:
+          service:
+            name: python-service
+            port:
+              name: python-service
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - "cert.CERT_MANAGER_LOCAL_DOMAIN_NAME"
+    secretName: cert-python-secret

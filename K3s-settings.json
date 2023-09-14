@@ -29,7 +29,7 @@
         "LetsEncryptEmail": ""
     },
     "DuckDns": {
-        "ApllyDockDns": "true",
+        "ApllyDuckDns": "true",
         "DuckDnsToken": "",
         "DuckDnsSubDomain": ""
     },
