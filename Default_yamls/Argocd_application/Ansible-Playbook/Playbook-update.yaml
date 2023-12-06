@@ -1,23 +1,47 @@
 ---
-- hosts: kuberntes_node
+- hosts: all #kuberntes_node
   become: true
-  become_user: root
+  vars:
+    created_username: ANSIBLE_NODE_USER
 
   tasks:
-    - name: Update apt repo and cache on all Debian/Ubuntu boxes
-      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
 
-    - name: Upgrade all packages on servers
-      apt: upgrade=dist force_apt_get=yes
+    - name: Setup passwordless sudo
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        regexp: '^%sudo'
+        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+        validate: '/usr/sbin/visudo -cf %s'
 
-    - name: Creating a file For Root Ansible
-      copy:
-        dest: "/etc/sudoers.d/ANSIBLE_NODE_USER"
-        content: |
-          ANSIBLE_NODE_USER ALL=(ALL) NOPASSWD: ALL
+    - name: Create a new regular user with sudo privileges
+      user:
+        name: "{{ created_username }}"
+        state: present
+        groups: sudo
+        append: true
+        create_home: true
+
+    - name: Set authorized key for remote user
+      ansible.posix.authorized_key:
+        user: "{{ created_username }}"
+        state: present
+        key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_rsa.pub') }}"
+
+    - name: Disable password authentication for root
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        state: present
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin prohibit-password'
 
     - name: Creating multiple files
       shell: curl https://releases.rancher.com/install-docker/20.10.sh | sh
       args:
         warn: no
-
+          
