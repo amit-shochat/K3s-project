@@ -138,6 +138,9 @@ configuring_ansible () {
 		
 		# Insatall Pack 
 		apt install -y  ansible sshpass &> /dev/null
+
+		#Install ansible module
+		ansible-galaxy collection install ansible.posix
 		# Enter sudo pasowrd user for Ansible install
 		if [ -z $PASS_FOR_USER ]; then 
 			pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
