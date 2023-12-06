@@ -180,7 +180,8 @@ install_k3s () {
 	if [ -z $k3s_flag ]; then
 		# Install k3s
 		echo -e "Installing K3S"
-		curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
+		openssl rand -hex 10 > k3s_secret.txt
+		curl -sfL https://get.k3s.io | K3S_TOKEN=`cat k3s_secret.txt` INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - server --cluster-init --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
 		# If no multe node disabled CriticalAddonsOnly taint
 		if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]; then
 			kubectl taint node $(hostname) CriticalAddonsOnly=true:NoExecute-
@@ -217,10 +218,12 @@ install_k3s () {
 	# Ansible add nodes
 	if [ $ANSIBLE_INSTALL == "true" ]; then
 		echo "Install K3s Worker agent" 
-		local K3S_TOKEN_KEY="`cat /var/lib/rancher/k3s/server/node-token`"
+		local K3S_TOKEN_KEY="`cat k3s_secret.txt`"
 		local K3S_URL_IP="`hostname -I | awk '{print $1}'`"
 		sed "s/K3S_URL_IP/$K3S_URL_IP/g" $ROOT_FOLDER/Default_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
 		sed -i "s/K3S_TOKEN_KEY/$K3S_TOKEN_KEY/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+		sed -i "s/K3S_EXTRA_ARG/$K3S_EXTRA_ARG/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
+		sed -i "s/INSTALL_K3S_VERSION_NUM/$INSTALL_K3S_VERSION/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
 		ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
 	fi
 }
