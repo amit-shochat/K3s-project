@@ -15,3 +15,9 @@
         dest: "/etc/sudoers.d/ANSIBLE_NODE_USER"
         content: |
           ANSIBLE_NODE_USER ALL=(ALL) NOPASSWD: ALL
+
+    - name: Creating multiple files
+      shell: curl https://releases.rancher.com/install-docker/20.10.sh | sh
+      args:
+        warn: no
+

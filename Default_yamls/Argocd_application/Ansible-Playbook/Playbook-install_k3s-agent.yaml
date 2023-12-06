@@ -16,7 +16,7 @@
 
 
     - name: Creating multiple files
-      shell: curl -sfL https://get.k3s.io | K3S_URL=https://K3S_URL_IP:6443 K3S_TOKEN=K3S_TOKEN_KEY INSTALL_K3S_VERSION="INSTALL_K3S_VERSION_NUM" sh -s - server --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
+      shell: curl -sfL https://get.k3s.io | K3S_URL=https://K3S_URL_IP:6443 K3S_TOKEN=K3S_TOKEN_KEY INSTALL_K3S_VERSION="INSTALL_K3S_VERSION_NUM" sh -s - server --docker --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
       args:
         warn: no
 

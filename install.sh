@@ -181,7 +181,7 @@ install_k3s () {
 		# Install k3s
 		echo -e "Installing K3S"
 		openssl rand -hex 10 > k3s_secret.txt
-		curl -sfL https://get.k3s.io | K3S_TOKEN=`cat k3s_secret.txt` INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - server --cluster-init --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
+		curl -sfL https://get.k3s.io | K3S_TOKEN=`cat k3s_secret.txt` INSTALL_K3S_VERSION="$INSTALL_K3S_VERSION" sh -s - server --docker --cluster-init --write-kubeconfig-mode 644 $K3S_EXTRA_ARG
 		# If no multe node disabled CriticalAddonsOnly taint
 		if [ $ANSIBLE_INSTALL == "false" ] && [ echo $INSTALL_K3S_VERSION | grep "CriticalAddonsOnly" ]; then
 			kubectl taint node $(hostname) CriticalAddonsOnly=true:NoExecute-
