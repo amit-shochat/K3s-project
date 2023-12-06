@@ -32,7 +32,7 @@ spec:
       - name: "server.service.type"
         value: LoadBalancer
       - name: "configs.secret.argocdServerAdminPassword"
-        value: ARGOCD_ADMIN_PASSWORD_BCRYPT
+        value: "$2a$10$jjahemn.zYQOXS7p2HuMmOj58HYoxygoO56RXtbqUUA6o5VuweZa2"
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

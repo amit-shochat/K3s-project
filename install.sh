@@ -168,7 +168,7 @@ configuring_ansible () {
 		echo "Run Update playbook for pack update Worker node"
 		sed "s/ANSIBLE_NODE_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Default_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml
 		sed -i "s/ANSIBLE_NODE_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml
-		ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
+		ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa --extra-vars "ansible_sudo_pass=$PASS_FOR_USER"
 		echo "Finish install and configuration ansible" 
 	fi
 }
