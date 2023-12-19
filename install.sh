@@ -157,7 +157,7 @@ configuring_ansible () {
 		for i in $ANSIBLE_WORKER_IP; do 
 			ssh-keyscan -H $i >> ~/.ssh/known_hosts
 			sudo runuser -l  $(logname) -c 'echo "$PASS_FOR_USER" | sshpass ssh-copy-id -i ~/.ssh/id_rsa.pub -o StrictHostKeyChecking=no $i || echo "FAILED"'
-			WORKER_HOSTNAME=`ssh -i /home/$(logname)/.ssh/id_rsa $(logname)@$i uname -n`
+			WORKER_HOSTNAME=`runuser -l $(logname) -c "ssh -i /home/$(logname)/.ssh/id_rsa $(logname)@$i uname -n"`
 			echo "copy User: $(logname) ssh key to worker $WORKER_HOSTNAME_$i"
 		done
 
@@ -166,7 +166,7 @@ configuring_ansible () {
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
 		echo -e "[kuberntes_node]" >> /etc/ansible/hosts
 		for i in $ANSIBLE_WORKER_IP; do 
-			WORKER_HOSTNAME=`ssh -i /home/$(logname)/.ssh/id_rsa $(logname)@$i uname -n`
+			WORKER_HOSTNAME=`runuser -l $(logname) -c "ssh -i /home/$(logname)/.ssh/id_rsa $(logname)@$i uname -n"`
 			echo -e "$WORKER_HOSTNAME ansible_host=$i" >> /etc/ansible/hosts
 		done
 		
