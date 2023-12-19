@@ -155,7 +155,7 @@ configuring_ansible () {
 
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
-			ssh-keyscan -H $i >> ~/.ssh/known_hosts
+			sudo runuser -l  $(logname) -c "ssh-keyscan -H $i >> ~/.ssh/known_hosts"
 			echo "copy User: $(logname) ssh key to worker $(dig -x $i +short | sed 's/\.//')_$i"
 			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i &> /dev/null"
 		done
