@@ -165,7 +165,7 @@ configuring_ansible () {
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
 		echo -e "[kuberntes_node]" >> /etc/ansible/hosts
 		for i in $ANSIBLE_WORKER_IP; do 
-			echo -e "$(dig -x $i +short | sed 's/\.//') ansible_host=$i" >> /etc/ansible/hosts 
+			echo -e "$(dig -x $i +short | sed 's/\.//')ansible_host= $i" >> /etc/ansible/hosts 
 		done
 		
 		# Update Playbook for user name 
