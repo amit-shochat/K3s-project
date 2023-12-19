@@ -140,7 +140,7 @@ configuring_ansible () {
 		apt install -y  ansible sshpass &> /dev/null
 
 		#Install ansible module
-		ansible-galaxy collection install ansible.posix
+		sudo runuser -l  $(logname) -c "ansible-galaxy collection install ansible.posix"
 		# Enter sudo pasowrd user for Ansible install
 		if [ -z $PASS_FOR_USER ]; then 
 			pass_var=`echo -e 'Please make sure theh master and nodes have a same user with the same password\nPlease provide the password (Just for the first ansible intall): \n\b> '`;while IFS= read -p "$pass_var" -r -s -n 1 letter ;do if [[ $letter == $'\0' ]];then break;fi;pass_var="*";PASS_FOR_USER+="$letter";done
@@ -172,7 +172,7 @@ configuring_ansible () {
 		echo "Run Update playbook for pack update Worker node"
 		sed "s/ANSIBLE_NODE_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Default_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml
 		sed -i "s/ANSIBLE_NODE_USER/$ANSIBLE_NODE_USER/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml
-		sudo runuser -l  $(logname) -c 'ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa --extra-vars "ansible_sudo_pass=$PASS_FOR_USER"'
+		sudo runuser -l  $(logname) -c "ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-update.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa --extra-vars "ansible_sudo_pass=$PASS_FOR_USER""
 		echo "Finish install and configuration ansible" 
 	fi
 }
@@ -230,7 +230,7 @@ install_k3s () {
 		sed -i "s/K3S_TOKEN_KEY/$K3S_TOKEN_KEY/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
 		sed -i "s/K3S_EXTRA_ARG/$K3S_EXTRA_ARG/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
 		sed -i "s/INSTALL_K3S_VERSION_NUM/$INSTALL_K3S_VERSION/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml
-		ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa
+		sudo runuser -l  $(logname) -c "ansible-playbook $ROOT_FOLDER/Configured_yamls/Argocd_application/Ansible-Playbook/Playbook-install_k3s-agent.yaml -u $(logname) --private-key /home/$(logname)/.ssh/id_rsa"
 	fi
 }
 
