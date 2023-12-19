@@ -156,7 +156,7 @@ configuring_ansible () {
 		# copy ssh to worker 
 		for i in $ANSIBLE_WORKER_IP; do 
 			sudo runuser -l  $(logname) -c "ssh-keyscan -H $i >> ~/.ssh/known_hosts"
-			echo "copy User: $(logname) ssh key to worker $(dig -x $i +short | sed 's/\.//')_$i"
+			echo "copy User: $(logname) ssh key to worker $(ssh $(logname)@$i uname -n)_$i"
 			sudo runuser -l  $(logname) -c "echo "$PASS_FOR_USER" | sshpass ssh-copy-id $i &> /dev/null"
 		done
 
@@ -165,7 +165,7 @@ configuring_ansible () {
 		if [ -f /etc/ansible/hosts ]; then cp /etc/ansible/hosts /etc/ansible/hosts.bak; rm -rf /etc/ansible/hosts;fi
 		echo -e "[kuberntes_node]" >> /etc/ansible/hosts
 		for i in $ANSIBLE_WORKER_IP; do 
-			echo -e "$(dig -x $i +short | sed 's/\.//')ansible_host= $i" >> /etc/ansible/hosts 
+			echo -e "$(ssh $(logname)@$i uname -n) ansible_host=$i" >> /etc/ansible/hosts 
 		done
 		
 		# Update Playbook for user name 
