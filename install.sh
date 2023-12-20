@@ -407,7 +407,7 @@ install_longhorn() {
 	sed -i "s/CERT_MANAGER_LOCAL_DOMAIN_NAME/$CERT_MANAGER_LOCAL_DOMAIN_NAME/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
 	sed -i "s/ARGOCD_ADMIN_PASSWORD_BCRYPT/$ARGOCD_ADMIN_PASSWORD_BCRYPT/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
 	kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
-	cp $ROOT_FOLDER/Default_yamls/Argocd_application/Longhorn/longhor.application.yaml $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/Longhorn.sa-role.yaml
+	cp $ROOT_FOLDER/Default_yamls/Argocd_application/Longhorn/Longhorn.sa-role.yaml $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/Longhorn.sa-role.yaml
 	kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/Longhorn.sa-role.yaml
 
 	# while [[ "$SEC" -lt 600 ]]; do 
