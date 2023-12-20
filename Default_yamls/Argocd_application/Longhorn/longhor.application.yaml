@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: longhorn
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://charts.longhorn.io
+    targetRevision: LONGHORN_VERSION 
+    chart: longhorn
+    helm:
+      values: | 
+        ingress:
+          ## Set to true to enable ingress record generation
+          enabled: true
+          ingressClassName: "nginx"
+          host: longhorn.CERT_MANAGER_LOCAL_DOMAIN_NAME
+          ## Set this to true in order to enable TLS on the ingress record
+          tls: true
+          ## Enable this in order to enable that the backend service will be connected at port 443
+          secureBackends: true
+          ## If TLS is set to true, you must declare what secret will store the key/certificate for TLS
+          tlsSecret: longhorn.local-tls
+          path: /
+          annotations:
+            cert-manager.io/cluster-issuer: local-domain-self-signed
+            kubernetes.io/tls-acme: "true"
+            nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+            nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+      parameters:
+      - name: "defaultSettings.defaultReplicaCount"
+        value: "2"
+      - name: "defaultSettings.priorityClass"
+        value: "high-priority"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true

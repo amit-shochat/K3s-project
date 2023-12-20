@@ -396,6 +396,29 @@ update_argo_chart() {
 	done
 }
 
+install_longhorn() {
+
+	# Deploy Longhorn-CSI
+	mkdir -p $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn
+	sed "s/LONGHORN_VERSION/$LONGHORN_VERSION/g" $ROOT_FOLDER/Default_yamls/Argocd_application/Longhorn/longhor.application.yaml > $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
+	sed -i "s/CERT_MANAGER_LOCAL_DOMAIN_NAME/$CERT_MANAGER_LOCAL_DOMAIN_NAME/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
+	sed -i "s/ARGOCD_ADMIN_PASSWORD_BCRYPT/$ARGOCD_ADMIN_PASSWORD_BCRYPT/g" $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
+	kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Longhorn/longhor.application.yaml
+	# while [[ "$SEC" -lt 600 ]]; do 
+	# 	let SEC++
+	# 	if [[ "$SEC" -eq 200 ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Unknown" ]]; then
+	# 		echo -e "\n Argocd apllication status unknown, delete and try agin"
+	# 		kubectl delete -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Argocd/Argocd-application.yaml
+	# 		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Argocd/Argocd-application.yaml
+	# 	fi
+	# 	if [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.health.status}') = "Healthy" ]] && [[ $(kubectl  -n  argocd get applications argocd -o 'jsonpath={..status.sync.status}') = "Synced" ]]; then 
+	# 		unset SEC
+	# 		break
+	# 	fi
+	# 	sleep 1
+	# done
+}
+
 install_duckdns () {
 	# Deploy DockDns for update IP on FQDN 
 	if [ $DUCKDNS_APPLY == "true" ]; then
@@ -416,7 +439,6 @@ install_duckdns () {
 		kubectl apply -f $ROOT_FOLDER/Configured_yamls/Argocd_application/Duckdns/duckdns.deployment.yaml
 		echo "Finish Deploy Duckdns app "
 	fi
-
 } 
 uninstall_all () {
     # Uninstall K3s
