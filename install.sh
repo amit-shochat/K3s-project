@@ -112,6 +112,8 @@ k3s_settings_file () {
 	INGRESS_NGINX_INSTALL="`jq -r '.IngressNginxSettings.InastallIngressNginx' $SETTING_FILE`"
 	INGRESS_NGINX_VERSION="`jq -r '.IngressNginxSettings.IngressNginxVersion' $SETTING_FILE`"
 
+	LONGHORN_VERSION="`jq -r '.LonghornSettings.LonghornVersion' $SETTING_FILE`"
+
 }
 
 install_pack () {
@@ -484,6 +486,7 @@ case $COMMISION_MODE in
 		install_ingress_nginx
 		install_duckdns
 		update_argo_chart
+		install_longhorn
 		chown $(logname):$(logname) -R $ROOT_FOLDER/Configured_yamls 
 	;;
 	Node)

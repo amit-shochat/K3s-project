@@ -41,5 +41,10 @@
     "IngressNginxSettings": {
         "InastallIngressNginx": "true",
         "IngressNginxVersion": "4.7.1"
+    },
+    "LonghornSettings": {
+        "InastallLonghorn": "true",
+        "LonghornVersion": "1.5.3"
     }
+
 }
