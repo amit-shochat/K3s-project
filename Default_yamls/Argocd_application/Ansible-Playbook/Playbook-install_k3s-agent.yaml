@@ -12,7 +12,7 @@
 
     - name : Install multiple packages
       apt: name={{ item }} state=latest update_cache=true
-      loop: [git, wget, unzip, curl, ssh, jq, apt-transport-https, apache2-utils] 
+      loop: [git, wget, unzip, curl, ssh, jq, apt-transport-https, apache2-utils, open-iscsi, nfs-common] 
 
 
     - name: Install Kubernetes on nodes
