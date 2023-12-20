@@ -35,7 +35,7 @@ spec:
         value: "high-priority"
   destination:
     server: https://kubernetes.default.svc
-    namespace: longhorn
+    namespace: longhorn-system
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
